@@ -17,24 +17,13 @@ function initWebSocket() {
             const tab = appState.tabs.find(t => t.symbol === msg.symbol);
             if (!tab) return;
 
-            // Прилагаме offset-а и към новите свещи в реално време
             const adjustedCandle = { ...msg.candle, time: msg.candle.time + TIMEZONE_OFFSET_SECONDS };
             tab.currentPrice = adjustedCandle.close;
-            
             if (appState.activeTabId === tab.id && candleSeries) {
-                if (tab.timeframe === '1m') {
-                    candleSeries.update(adjustedCandle);
-                    Object.keys(activeIndicators).forEach(indId => {
-                        window.Indicators[indId].update(activeIndicators[indId].refs, adjustedCandle, activeIndicators[indId].config);
-                    });
-                } else {
-                    // За други таймфреймове просто преизчисляваме историята
-                    fetchHistoryAndRender(tab); 
-                }
+                applyLiveCandle(tab, msg.candle);
                 document.getElementById('chartLivePrice').textContent = adjustedCandle.close.toFixed(2) + ' USDT';
                 updateBpsOverlay();
             }
-            
             checkTabTPSL(tab, adjustedCandle.close);
             if (appState.activeTabId === tab.id) updateActiveTabUI();
             updateGlobalStats();

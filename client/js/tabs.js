@@ -26,7 +26,7 @@ function createTab(symbol) {
         switchTab(appState.tabs.find(t => t.symbol === symbol).id);
         return;
     }
-    const newTab = { id: Date.now(), symbol, position: null, history: [], currentPrice: 0, customLines: [], timeframe: '1m', rawCandles: [], totalCandles: 0 };
+    const newTab = { id: Date.now(), symbol, position: null, history: [], currentPrice: 0, customLines: [], timeframe: '1m', rawCandles: [], totalCandles: 0, hasMore: true, oldestTime: null, loadingOlder: false, liveMinuteTime: null, liveBaseVolume: 0 };
     appState.tabs.push(newTab);
     renderTabs();
     switchTab(newTab.id);
@@ -132,79 +132,162 @@ function setTimeframe(tf) {
         activeIndicators[indId].refs = ind.init(chartObj, candleSeries, activeIndicators[indId].config);
     });
 
-    fetchHistoryAndRender(tab, false);
+    fetchHistoryAndRender(tab, true);
 }
 
 // Нова функция за ръчно центриране
 function resetChartToLatest() {
     const tab = getActiveTab();
-    if (!tab || !tab.rawCandles) return;
-    
-    const aggregated = aggregateCandles(tab.rawCandles, tab.timeframe);
-    if (aggregated.length > 0) {
-        const lastIndex = aggregated.length - 1;
-        chartObj.timeScale().setVisibleLogicalRange({ from: lastIndex - 150, to: lastIndex + 10 });
-    }
+    if (!tab || !tab.rawCandles || !tab.rawCandles.length) return;
+    const count = tab.rawCandles.length;
+    chartObj.timeScale().setVisibleLogicalRange({ from: Math.max(0, count - 150), to: count + 10 });
+}
+
+function chartDataFor(tab) {
+    return tab.rawCandles.map(c => ({ ...c, time: c.time + TIMEZONE_OFFSET_SECONDS }));
+}
+
+function rebuildIndicators(data) {
+    Object.keys(activeIndicators).forEach(indId => {
+        const ind = window.Indicators[indId];
+        const refs = activeIndicators[indId].refs;
+        const cfg = activeIndicators[indId].config;
+        if (refs.volumeSeries) refs.volumeSeries.setData([]);
+        if (refs.volumeMaSeries) refs.volumeMaSeries.setData([]);
+        if (refs.maSeries) refs.maSeries.setData([]);
+        if (ind._history) ind._history = [];
+        data.forEach(c => ind.update(refs, c, cfg));
+    });
 }
 
 async function fetchHistoryAndRender(tab, isNewLoad = false) {
     const startTime = performance.now();
     try {
-        const limit = 2000;
-        const res = await fetch(`${PYTHON_SERVICE_URL}/api/history/${tab.symbol}?limit=${limit}`);
-
-        if (res.ok) {
-            const rawCandles = await res.json();
-
-            if (rawCandles.length === 0) return;
-
-            tab.rawCandles = rawCandles;
-            tab.totalCandles = rawCandles.length;
-
-            debugStats.loadedCandles = rawCandles.length;
-            debugStats.totalBackendCandles = tab.totalCandles;
-            debugStats.currentBatches = Math.ceil(rawCandles.length / 5000);
-            debugStats.totalBatches = Math.ceil(tab.totalCandles / 5000);
-
-            const aggregated = aggregateCandles(rawCandles, tab.timeframe);
-            candleSeries.setData(aggregated);
-
-            Object.keys(activeIndicators).forEach(indId => {
-                const ind = window.Indicators[indId];
-                const refs = activeIndicators[indId].refs;
-                const cfg = activeIndicators[indId].config;
-
-                if (refs.volumeSeries) refs.volumeSeries.setData([]);
-                if (refs.volumeMaSeries) refs.volumeMaSeries.setData([]);
-                if (refs.maSeries) refs.maSeries.setData([]);
-
-                aggregated.forEach(c => ind.update(refs, c, cfg));
-            });
-
-            if (aggregated.length > 0) {
-                tab.currentPrice = aggregated[aggregated.length - 1].close;
-                document.getElementById('chartLivePrice').textContent = tab.currentPrice.toFixed(2) + ' USDT';
-
-                const fixStart = performance.now();
-                
-                // ТУК ПРЕМАХНАХМЕ АВТОМАТИЧНОТО ЦЕНТРИРАНЕ
-                // Оставяме го да се случи САМО при първоначално зареждане на таба
-                if (isNewLoad) {
-                    if (aggregated.length > 150) {
-                        const lastIndex = aggregated.length - 1;
-                        chartObj.timeScale().setVisibleLogicalRange({ from: lastIndex - 150, to: lastIndex + 10 });
-                    } else {
-                        chartObj.timeScale().fitContent();
-                    }
-                }
-                
-                debugStats.lastGraphFixTime = (performance.now() - fixStart) / 1000;
-            }
+        const requestId = tab.historyRequestId = (tab.historyRequestId || 0) + 1;
+        const requestedTimeframe = tab.timeframe;
+        if (isNewLoad) {
+            tab.rawCandles = [];
+            tab.oldestTime = null;
+            tab.hasMore = true;
+            tab.loadingOlder = false;
+            tab.liveMinuteTime = null;
+            tab.liveBaseVolume = 0;
         }
-    } catch (e) { console.error("Грешка при връзка със сървиза", e); }
-    finally {
+        const res = await fetch(`${PYTHON_SERVICE_URL}/api/history/${tab.symbol}?timeframe=${encodeURIComponent(tab.timeframe)}&limit=1500`);
+        if (!res.ok) throw new Error(`History HTTP ${res.status}`);
+        const payload = await res.json();
+        if (appState.activeTabId !== tab.id || requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
+        const rawCandles = payload.candles || [];
+        if (!rawCandles.length) return;
+
+        tab.rawCandles = rawCandles;
+        tab.liveMinuteTime = null;
+        tab.liveBaseVolume = 0;
+        tab.oldestTime = payload.oldest_time;
+        tab.hasMore = !!payload.has_more;
+        tab.totalCandles = rawCandles.length;
+        const chartData = chartDataFor(tab);
+        candleSeries.setData(chartData);
+        rebuildIndicators(chartData);
+
+        debugStats.loadedCandles = rawCandles.length;
+        debugStats.totalBackendCandles = rawCandles.length;
+        debugStats.currentBatches = 1;
+        debugStats.totalBatches = tab.hasMore ? '1+' : 1;
+
+        const last = chartData[chartData.length - 1];
+        tab.currentPrice = last.close;
+        const priceEl = document.getElementById('chartLivePrice');
+        if (priceEl) priceEl.textContent = tab.currentPrice.toFixed(2) + ' USDT';
+
+        if (isNewLoad) resetChartToLatest();
+    } catch (e) {
+        console.error('Грешка при зареждане на историята', e);
+    } finally {
         debugStats.initialLoadTime = (performance.now() - startTime) / 1000;
         updateDebugPanel();
+    }
+}
+
+async function loadOlderCandles(tab) {
+    if (!tab || !tab.hasMore || tab.loadingOlder || !tab.oldestTime || appState.activeTabId !== tab.id) return;
+    tab.loadingOlder = true;
+    const oldRange = chartObj.timeScale().getVisibleLogicalRange();
+    const requestedTimeframe = tab.timeframe;
+    try {
+        const url = `${PYTHON_SERVICE_URL}/api/history/${tab.symbol}?timeframe=${encodeURIComponent(tab.timeframe)}&limit=1500&before=${tab.oldestTime}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Older history HTTP ${res.status}`);
+        const payload = await res.json();
+        if (appState.activeTabId !== tab.id || requestedTimeframe !== tab.timeframe || !payload.candles || !payload.candles.length) {
+            tab.hasMore = false;
+            return;
+        }
+        const existingFirst = tab.oldestTime;
+        const older = payload.candles.filter(c => c.time < existingFirst);
+        if (!older.length) {
+            tab.hasMore = false;
+            return;
+        }
+        tab.rawCandles = older.concat(tab.rawCandles);
+        tab.oldestTime = tab.rawCandles[0].time;
+        tab.hasMore = !!payload.has_more;
+        const data = chartDataFor(tab);
+        candleSeries.setData(data);
+        rebuildIndicators(data);
+        if (oldRange) {
+            const shift = older.length;
+            chartObj.timeScale().setVisibleLogicalRange({ from: oldRange.from + shift, to: oldRange.to + shift });
+        }
+        debugStats.loadedCandles = tab.rawCandles.length;
+        debugStats.totalBackendCandles = tab.rawCandles.length;
+        debugStats.currentBatches = Math.ceil(tab.rawCandles.length / 1500);
+        debugStats.totalBatches = tab.hasMore ? '∞' : debugStats.currentBatches;
+        updateDebugPanel();
+    } catch (e) {
+        console.error('Грешка при зареждане на по-стара история', e);
+    } finally {
+        tab.loadingOlder = false;
+    }
+}
+
+function applyLiveCandle(tab, candle) {
+    const seconds = { '1m': 60, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800 }[tab.timeframe] || 60;
+    const bucket = Math.floor(candle.time / seconds) * seconds;
+    const bars = tab.rawCandles || (tab.rawCandles = []);
+    let bar = bars.length ? bars[bars.length - 1] : null;
+
+    if (seconds === 60) {
+        if (bar && bar.time === candle.time) bars[bars.length - 1] = { ...candle };
+        else { bars.push({ ...candle }); if (bars.length > 5000) bars.shift(); }
+    } else {
+        if (tab.liveMinuteTime !== candle.time) {
+            tab.liveMinuteTime = candle.time;
+            tab.liveBaseVolume = bar && bar.time === bucket ? bar.volume : 0;
+        }
+        if (bar && bar.time === bucket) {
+            bars[bars.length - 1] = {
+                time: bucket, open: bar.open,
+                high: Math.max(bar.high, candle.high), low: Math.min(bar.low, candle.low),
+                close: candle.close, volume: tab.liveBaseVolume + candle.volume
+            };
+        } else {
+            bars.push({ time: bucket, open: candle.open, high: candle.high, low: candle.low, close: candle.close, volume: candle.volume });
+            if (bars.length > 5000) bars.shift();
+            tab.liveBaseVolume = 0;
+        }
+    }
+    const latest = bars[bars.length - 1];
+    const adjusted = { ...latest, time: latest.time + TIMEZONE_OFFSET_SECONDS };
+    if (appState.activeTabId === tab.id && candleSeries) {
+        candleSeries.update(adjusted);
+        // Indicator history is rebuilt on historical loads; update the live point without a full history request.
+        Object.keys(activeIndicators).forEach(id => {
+            const refs = activeIndicators[id].refs;
+            if (id === 'Volume' && refs.volumeSeries) {
+                refs.volumeSeries.update({ time: adjusted.time, value: adjusted.volume, color: adjusted.close >= adjusted.open ? activeIndicators[id].config.upColor : activeIndicators[id].config.downColor });
+            }
+        });
     }
 }
 

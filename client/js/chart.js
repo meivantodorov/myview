@@ -18,7 +18,11 @@ function initChart() {
     }).observe(chartEl);
 
     setInterval(updateBpsOverlay, 100);
-    // ТЕСТ: Махнахме Lazy Loading слушателя напълно
+    chartObj.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (!range) return;
+        const tab = getActiveTab();
+        if (tab && range.from < 300) loadOlderCandles(tab);
+    });
 }
 
 function aggregateCandles(candles, timeframe) {
