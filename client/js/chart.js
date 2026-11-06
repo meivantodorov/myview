@@ -21,32 +21,43 @@ function initChart() {
 }
 
 function aggregateCandles(candles, timeframe) {
-    if (timeframe === '1m' || !candles || candles.length === 0) return candles;
+    if (!candles || candles.length === 0) return [];
     
-    const tfSeconds = { '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800 };
-    const sec = tfSeconds[timeframe];
-    if (!sec) return candles;
+    // 1. ГРУПИРАНЕ (изцяло в UTC, за да съвпада 1:1 с Binance)
+    let aggregated = [];
+    if (timeframe === '1m') {
+        // За 1m просто копираме суровите данни
+        aggregated = candles.map(c => ({ ...c }));
+    } else {
+        const tfSeconds = { '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800 };
+        const sec = tfSeconds[timeframe];
+        if (!sec) return candles; // fallback
 
-    const aggregated = [];
-    let currentBucket = null;
+        let currentBucket = null;
 
-    for (const c of candles) {
-        // ТУК Е ПРОМЯНАТА: Прилагаме отместването, за да покажем локално време
-        const adjustedTime = c.time + TIMEZONE_OFFSET_SECONDS;
-        const bucketTime = Math.floor(adjustedTime / sec) * sec;
-        
-        if (!currentBucket || currentBucket.time !== bucketTime) {
-            if (currentBucket) aggregated.push(currentBucket);
-            currentBucket = { time: bucketTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
-        } else {
-            currentBucket.high = Math.max(currentBucket.high, c.high);
-            currentBucket.low = Math.min(currentBucket.low, c.low);
-            currentBucket.close = c.close;
-            currentBucket.volume += c.volume;
+        for (const c of candles) {
+            // Групираме по абсолютното UTC време
+            const bucketTime = Math.floor(c.time / sec) * sec;
+            
+            if (!currentBucket || currentBucket.time !== bucketTime) {
+                if (currentBucket) aggregated.push(currentBucket);
+                // ВАЖНО: Записваме времето на КОША (bucketTime), а не времето на първата свещ
+                currentBucket = { time: bucketTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
+            } else {
+                currentBucket.high = Math.max(currentBucket.high, c.high);
+                currentBucket.low = Math.min(currentBucket.low, c.low);
+                currentBucket.close = c.close;
+                currentBucket.volume += c.volume;
+            }
         }
+        if (currentBucket) aggregated.push(currentBucket);
     }
-    if (currentBucket) aggregated.push(currentBucket);
-    return aggregated;
+
+    // 2. ВИЗУАЛИЗАЦИЯ (Прилагаме offset-а СЛЕД групирането)
+    return aggregated.map(c => ({
+        ...c,
+        time: c.time + TIMEZONE_OFFSET_SECONDS
+    }));
 }
 
 function updateBpsOverlay() {

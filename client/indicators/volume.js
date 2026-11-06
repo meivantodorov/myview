@@ -57,6 +57,7 @@ window.Indicators.Volume = {
                 this._history.shift();
             }
 
+            // Рисуваме MA само ако имаме точно нужния брой свещи (както прави Binance)
             if (this._history.length === config.maPeriod) {
                 const sum = this._history.reduce((a, b) => a + b, 0);
                 const maValue = sum / config.maPeriod;

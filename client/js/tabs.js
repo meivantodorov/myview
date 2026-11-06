@@ -123,7 +123,8 @@ async function fetchHistoryAndRender(tab) {
         const res = await fetch(`${PYTHON_SERVICE_URL}/api/history/${tab.symbol}`);
         if (res.ok) {
             const rawCandles = await res.json();
-            // ВЕЧЕ НЯМА OFFSET. Подаваме суровите данни.
+            
+            // Подаваме суровите данни към агрегатора (който вътре в себе си прилага TIMEZONE_OFFSET_SECONDS)
             const aggregated = aggregateCandles(rawCandles, tab.timeframe);
             
             candleSeries.setData(aggregated);

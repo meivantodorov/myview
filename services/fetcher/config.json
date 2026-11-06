@@ -1,5 +1,5 @@
 {
   "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-  "history_limit": 1000,
+  "history_limit": 2017,
   "ws_retry_delay": 5
 }

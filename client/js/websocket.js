@@ -17,7 +17,7 @@ function initWebSocket() {
             const tab = appState.tabs.find(t => t.symbol === msg.symbol);
             if (!tab) return;
 
-            // ТУК Е ПРОМЯНАТА: Добавяме отместването и към новите свещи в реално време
+            // Прилагаме offset-а и към новите свещи в реално време
             const adjustedCandle = { ...msg.candle, time: msg.candle.time + TIMEZONE_OFFSET_SECONDS };
             tab.currentPrice = adjustedCandle.close;
             
@@ -28,6 +28,7 @@ function initWebSocket() {
                         window.Indicators[indId].update(activeIndicators[indId].refs, adjustedCandle, activeIndicators[indId].config);
                     });
                 } else {
+                    // За други таймфреймове просто преизчисляваме историята
                     fetchHistoryAndRender(tab); 
                 }
                 document.getElementById('chartLivePrice').textContent = adjustedCandle.close.toFixed(2) + ' USDT';
