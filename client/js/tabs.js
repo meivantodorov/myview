@@ -135,6 +135,18 @@ function setTimeframe(tf) {
     fetchHistoryAndRender(tab, false);
 }
 
+// Нова функция за ръчно центриране
+function resetChartToLatest() {
+    const tab = getActiveTab();
+    if (!tab || !tab.rawCandles) return;
+    
+    const aggregated = aggregateCandles(tab.rawCandles, tab.timeframe);
+    if (aggregated.length > 0) {
+        const lastIndex = aggregated.length - 1;
+        chartObj.timeScale().setVisibleLogicalRange({ from: lastIndex - 150, to: lastIndex + 10 });
+    }
+}
+
 async function fetchHistoryAndRender(tab, isNewLoad = false) {
     const startTime = performance.now();
     try {
@@ -174,12 +186,18 @@ async function fetchHistoryAndRender(tab, isNewLoad = false) {
                 document.getElementById('chartLivePrice').textContent = tab.currentPrice.toFixed(2) + ' USDT';
 
                 const fixStart = performance.now();
-                if (aggregated.length > 150) {
-                    const lastIndex = aggregated.length - 1;
-                    chartObj.timeScale().setVisibleLogicalRange({ from: lastIndex - 150, to: lastIndex });
-                } else {
-                    chartObj.timeScale().fitContent();
+                
+                // ТУК ПРЕМАХНАХМЕ АВТОМАТИЧНОТО ЦЕНТРИРАНЕ
+                // Оставяме го да се случи САМО при първоначално зареждане на таба
+                if (isNewLoad) {
+                    if (aggregated.length > 150) {
+                        const lastIndex = aggregated.length - 1;
+                        chartObj.timeScale().setVisibleLogicalRange({ from: lastIndex - 150, to: lastIndex + 10 });
+                    } else {
+                        chartObj.timeScale().fitContent();
+                    }
                 }
+                
                 debugStats.lastGraphFixTime = (performance.now() - fixStart) / 1000;
             }
         }

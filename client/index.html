@@ -46,9 +46,19 @@
         
         /* Chart Area */
         #chartWrapper { flex: 1; position: relative; display: flex; flex-direction: column; }
-        #chartHeader { position: absolute; top: 10px; left: 15px; z-index: 10; display: flex; align-items: baseline; gap: 15px; pointer-events: none; }
+        
+        /* Controls - moved inside header overlay */
+        #chartHeader { position: absolute; top: 10px; left: 15px; z-index: 10; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .header-top { display: flex; align-items: baseline; gap: 15px; }
         #chartSymbolLabel { font-size: 20px; font-weight: bold; }
         #chartLivePrice { font-size: 18px; font-weight: bold; color: var(--text-muted); }
+        
+        #controls { display: flex; gap: 5px; align-items: center; pointer-events: auto; }
+        .tf-btn { background: rgba(21, 26, 33, 0.6); border: 1px solid var(--border); color: var(--text-muted); padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; transition: 0.2s; }
+        .tf-btn:hover { background: var(--border); color: var(--text); }
+        .tf-btn.active { background: var(--yellow); color: #000; border-color: var(--yellow); font-weight: bold; }
+        
+        .spacer { flex: 1; }
         
         #chart { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
         #chartCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -98,13 +108,6 @@
         .history-item > div { display: flex; flex-direction: column; gap: 2px; }
         .history-sub { color: var(--text-muted); font-size: 10px; }
         .pnl { font-weight: bold; font-family: monospace; }
-        
-        /* Controls Bar */
-        #controls { display: flex; padding: 10px 15px; background: var(--panel); border-bottom: 1px solid var(--border); gap: 10px; align-items: center; }
-        .tf-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-        .tf-btn:hover { background: rgba(255,255,255,0.05); }
-        .tf-btn.active { background: var(--border); color: var(--text); }
-        .spacer { flex: 1; }
         
         /* Indicators UI */
         .ind-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; }
@@ -186,17 +189,36 @@
     <div id="main">
         <!-- Chart Area -->
         <div id="chartWrapper">
-            <div id="controls">
-                <button class="tf-btn active" data-tf="1m" onclick="setTimeframe('1m')">1m</button>
-                <button class="tf-btn" data-tf="5m" onclick="setTimeframe('5m')">5m</button>
-                <button class="tf-btn" data-tf="15m" onclick="setTimeframe('15m')">15m</button>
-                <button class="tf-btn" data-tf="30m" onclick="setTimeframe('30m')">30m</button>
-                <button class="tf-btn" data-tf="1h" onclick="setTimeframe('1h')">1h</button>
-                <button class="tf-btn" data-tf="4h" onclick="setTimeframe('4h')">4h</button>
-                <div class="spacer"></div>
-                
+            <div id="chartHeader">
+                <div class="header-top">
+                    <div id="chartSymbolLabel">—</div>
+                    <div id="chartLivePrice">—</div>
+                </div>
+                <div id="controls">
+                    <button class="tf-btn active" data-tf="1m" onclick="setTimeframe('1m')">1m</button>
+                    <button class="tf-btn" data-tf="5m" onclick="setTimeframe('5m')">5m</button>
+                    <button class="tf-btn" data-tf="15m" onclick="setTimeframe('15m')">15m</button>
+                    <button class="tf-btn" data-tf="30m" onclick="setTimeframe('30m')">30m</button>
+                    <button class="tf-btn" data-tf="1h" onclick="setTimeframe('1h')">1h</button>
+                    <button class="tf-btn" data-tf="4h" onclick="setTimeframe('4h')">4h</button>
+                    <button class="tf-btn" data-tf="1d" onclick="setTimeframe('1d')">1d</button>
+                    <button class="tf-btn" data-tf="1w" onclick="setTimeframe('1w')">1w</button>
+                    <button class="tf-btn" onclick="resetChartToLatest()" title="Reset to Latest" style="color: var(--yellow); border-color: var(--yellow);">⟲</button>
+                </div>
+            </div>
+
+            <div id="chart"></div>
+            <div id="chartCanvas">
+                <div id="bpsOverlay">
+                    <div id="labelTP" class="bps-label"></div>
+                    <div id="labelSL" class="bps-label"></div>
+                </div>
+                <div id="addLineBtn">+</div>
+            </div>
+
+            <!-- Indicators (Moved to top right of chart) -->
+            <div style="position: absolute; top: 10px; right: 60px; z-index: 10; display: flex; gap: 10px;">
                 <button class="ind-btn" id="btnToggleMA" onclick="toggleIndicator('MA')">MA</button>
-                
                 <div class="ind-menu">
                     <button class="ind-btn" id="btnToggleVolume" onclick="toggleIndicator('Volume')">Vol</button>
                     <button class="ind-btn" onclick="toggleVolumeSettings(event)" style="padding: 4px;">⚙️</button>
@@ -206,20 +228,6 @@
                         <input type="number" id="volMAPeriod" value="20" onchange="saveVolumeSettings()">
                     </div>
                 </div>
-            </div>
-
-            <div id="chartHeader">
-                <div id="chartSymbolLabel">—</div>
-                <div id="chartLivePrice">—</div>
-            </div>
-            
-            <div id="chart"></div>
-            <div id="chartCanvas">
-                <div id="bpsOverlay">
-                    <div id="labelTP" class="bps-label"></div>
-                    <div id="labelSL" class="bps-label"></div>
-                </div>
-                <div id="addLineBtn">+</div>
             </div>
         </div>
 
