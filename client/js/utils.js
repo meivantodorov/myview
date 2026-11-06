@@ -52,7 +52,12 @@ function copyDebugLog() {
         volumeConfig: window.Indicators.Volume ? window.Indicators.Volume.config : null,
         appState: { capital: appState.capital, posPct: appState.posPct, maxPos: appState.maxPos, activeTabId: appState.activeTabId, realizedPnl: appState.realizedPnl },
         tabs: appState.tabs.map(t => ({
-            id: t.id, symbol: t.symbol, currentPrice: t.currentPrice, timeframe: t.timeframe,
+            id: t.id,
+            symbol: t.symbol,
+            currentPrice: t.currentPrice,
+            timeframe: t.timeframe,
+            loadedCandles: t.rawCandles ? t.rawCandles.length : 0,
+            totalCandlesInBackend: t.totalCandles || 0,
             position: t.position ? { side: t.position.side, entry: t.position.entry, sl: t.position.sl, tp: t.position.tp, sizeUSD: t.position.sizeUSD } : null,
             history: t.history
         }))

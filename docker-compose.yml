@@ -4,9 +4,11 @@ services:
     container_name: binance_backend
     ports:
       - "8080:8080"
-    restart: unless-stopped # Ако сървизът умре, Docker автоматично го вдига
+    restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
+    volumes:
+      - ./services/fetcher/data:/app/data  # ТУК ЗАПАЗВАМЕ КЕША
 
   frontend:
     build: ./client

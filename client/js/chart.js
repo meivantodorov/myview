@@ -18,30 +18,27 @@ function initChart() {
     }).observe(chartEl);
 
     setInterval(updateBpsOverlay, 100);
+    // ТЕСТ: Махнахме Lazy Loading слушателя напълно
 }
 
 function aggregateCandles(candles, timeframe) {
     if (!candles || candles.length === 0) return [];
     
-    // 1. ГРУПИРАНЕ (изцяло в UTC, за да съвпада 1:1 с Binance)
     let aggregated = [];
     if (timeframe === '1m') {
-        // За 1m просто копираме суровите данни
         aggregated = candles.map(c => ({ ...c }));
     } else {
         const tfSeconds = { '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800 };
         const sec = tfSeconds[timeframe];
-        if (!sec) return candles; // fallback
+        if (!sec) return candles;
 
         let currentBucket = null;
 
         for (const c of candles) {
-            // Групираме по абсолютното UTC време
             const bucketTime = Math.floor(c.time / sec) * sec;
             
             if (!currentBucket || currentBucket.time !== bucketTime) {
                 if (currentBucket) aggregated.push(currentBucket);
-                // ВАЖНО: Записваме времето на КОША (bucketTime), а не времето на първата свещ
                 currentBucket = { time: bucketTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
             } else {
                 currentBucket.high = Math.max(currentBucket.high, c.high);
@@ -53,7 +50,6 @@ function aggregateCandles(candles, timeframe) {
         if (currentBucket) aggregated.push(currentBucket);
     }
 
-    // 2. ВИЗУАЛИЗАЦИЯ (Прилагаме offset-а СЛЕД групирането)
     return aggregated.map(c => ({
         ...c,
         time: c.time + TIMEZONE_OFFSET_SECONDS

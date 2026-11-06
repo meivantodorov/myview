@@ -1,6 +1,6 @@
 // client/js/state.js
 
-const VERSION = "v7.4"; // Вдигаме версията, защото правим промяна по Frontend-а
+const VERSION = "v7.6"; // Вдигаме версията за дебъг
 const PYTHON_SERVICE_URL = "http://127.0.0.1:8080";
 const FEE_RATE = 0.00075;
 
@@ -23,9 +23,6 @@ let appState = {
 let CLIENT_HASH = "UNKNOWN";
 let BACKEND_HASH = "UNKNOWN";
 
-// ТУК Е ПРОМЯНАТА: Binance връща UTC. За да покажем локално време, трябва да ИЗВАДИМ offset-а.
-// getTimezoneOffset() връща минутите, с които локалното време изостава от UTC (напр. за UTC+2 връща -120).
-// За да обърнем времето от UTC към локално, трябва да умножим по -60.
 let TIMEZONE_OFFSET_SECONDS = -new Date().getTimezoneOffset() * 60;
 
 let chartObj = null;
@@ -37,3 +34,13 @@ let activeIndicators = {};
 let labelTPEl = null;
 let labelSLEl = null;
 let addLineBtn = null;
+
+// НОВИ ПРОМЕНЛИВИ ЗА ДЕБЪГ ПАНЕЛА
+let debugStats = {
+    initialLoadTime: 0,
+    lastGraphFixTime: 0,
+    totalBatches: 0,
+    currentBatches: 0,
+    totalBackendCandles: 0,
+    loadedCandles: 0
+};

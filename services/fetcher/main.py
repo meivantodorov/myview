@@ -15,22 +15,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 CONFIG_FILE = "config.json"
 BACKEND_HASH = "UNKNOWN"
+DATA_DIR = "data"
 
 # ==================== ИЗЧИСЛЯВАНЕ НА ХЕШ ====================
 def calculate_hash():
-    """Изчислява SHA-256 хеш на main.py и requirements.txt"""
     hash_sha256 = hashlib.sha256()
     files_to_hash = ["main.py", "requirements.txt"]
-
     for file_name in files_to_hash:
         try:
-            # Нормализираме новите редове, за да не се разминава на Windows/Linux
             with open(file_name, "rb") as f:
                 content = f.read().replace(b'\r\n', b'\n')
                 hash_sha256.update(content)
         except FileNotFoundError:
             pass
-
     return hash_sha256.hexdigest()
 
 # ==================== СЪСТОЯНИЕ ====================
@@ -51,7 +48,6 @@ def log_event(msg: str, level: str = "INFO"):
     state["logs"].insert(0, log_line)
     if len(state["logs"]) > 200:
         state["logs"] = state["logs"][:200]
-
     try:
         print(log_line)
     except UnicodeEncodeError:
@@ -59,49 +55,78 @@ def log_event(msg: str, level: str = "INFO"):
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
-        default_cfg = {"symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"], "history_limit": 1000, "ws_retry_delay": 5}
+        default_cfg = {"symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"], "history_limit": 2000, "ws_retry_delay": 5}
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(default_cfg, f, indent=2)
 
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         state["config"] = json.load(f)
-
     log_event(f"Конфигурация заредена: {len(state['config'].get('symbols', []))} двойки.")
 
-# ==================== BINANCE DATA FETCHING ====================
-async def fetch_history(session: aiohttp.ClientSession, symbol: str, limit: int = 1000):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit={limit}"
+# ==================== КЕШ И ИСТОРИЯ ====================
+def get_cache_path(symbol):
+    try:
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR, exist_ok=True)
+        return os.path.join(DATA_DIR, f"{symbol}.json")
+    except Exception as e:
+        log_event(f"Не мога да създам папка data: {e}", "ERROR")
+        return None
+
+def load_cache(symbol):
+    path = get_cache_path(symbol)
+    if path and os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            log_event(f"Грешка при четене на кеш за {symbol}: {e}", "ERROR")
+    return None
+
+def save_cache(symbol, candles):
+    path = get_cache_path(symbol)
+    if not path: return
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(candles, f)
+    except Exception as e:
+        log_event(f"Грешка при запис на кеш за {symbol}: {e}", "ERROR")
+
+async def fetch_binance_klines(session, symbol, interval, start_time=None, end_time=None, limit=1000):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+    if start_time: url += f"&startTime={start_time}"
+    if end_time: url += f"&endTime={end_time}"
+    
     try:
         async with session.get(url) as response:
             if response.status == 200:
                 data = await response.json()
-                candles = []
-                for k in data:
-                    candles.append({
-                        "time": k[0] // 1000,
-                        "open": float(k[1]),
-                        "high": float(k[2]),
-                        "low": float(k[3]),
-                        "close": float(k[4]),
-                        "volume": float(k[5])
-                    })
-                state["candles"][symbol] = candles
-                log_event(f"Успешно изтеглени {len(candles)} свещи за {symbol}.")
-                return True
-            else:
-                log_event(f"Грешка при дърпане на история за {symbol}: {response.status}", "ERROR")
+                return [{
+                    "time": k[0] // 1000,
+                    "open": float(k[1]),
+                    "high": float(k[2]),
+                    "low": float(k[3]),
+                    "close": float(k[4]),
+                    "volume": float(k[5])
+                } for k in data]
     except Exception as e:
-        log_event(f"Изключение при дърпане на история за {symbol}: {e}", "ERROR")
-    return False
+        log_event(f"Изключение при дърпане на {symbol}: {e}", "ERROR")
+    return []
 
 async def init_history():
     async with aiohttp.ClientSession() as session:
-        tasks = []
         for sym in state["config"]["symbols"]:
-            state["candles"][sym] = []
-            tasks.append(fetch_history(session, sym, state["config"].get("history_limit", 1000)))
-        if tasks:
-            await asyncio.gather(*tasks)
+            cached = load_cache(sym)
+            if cached:
+                log_event(f"Зареден кеш за {sym} с {len(cached)} свещи.")
+                state["candles"][sym] = cached
+            else:
+                log_event(f"Няма кеш за {sym}. Изтегляне...")
+                # Дърпаме 2000 свещи по подразбиране
+                data = await fetch_binance_klines(session, sym, "1m", limit=2000)
+                state["candles"][sym] = data
+                save_cache(sym, data)
+                log_event(f"Изтеглени {len(data)} свещи за {sym}.")
 
 # ==================== WEBSOCKET MANAGER ====================
 class BinanceWSManager:
@@ -149,8 +174,6 @@ class BinanceWSManager:
                                         state["candles"][symbol][-1] = candle
                                     else:
                                         state["candles"][symbol].append(candle)
-                                        if len(state["candles"][symbol]) > state["config"].get("history_limit", 1000):
-                                            state["candles"][symbol].pop(0)
                                 else:
                                     state["candles"][symbol].append(candle)
 
