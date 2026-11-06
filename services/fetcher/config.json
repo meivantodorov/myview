@@ -1,0 +1,5 @@
+{
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  "history_limit": 1000,
+  "ws_retry_delay": 5
+}
