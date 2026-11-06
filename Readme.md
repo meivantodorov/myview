@@ -13,3 +13,68 @@
 За да стартирате целия проект (Backend + Frontend) е нужно да имате инсталиран **Docker Desktop** и той да работи във фонов режим.
 
 Има готови предифинирани скриптове в директорията /scripts. Те позволяват стартиране, спиране, рестартиране и проверка на статус.
+
+Project tree:
+
+myview> tree /F
+Folder PATH listing
+Volume serial number is 381B-7FAA
+C:.
+│   .gitignore
+│   agents.md
+│   debug_service.bat
+│   docker-compose.yml
+│   project.zip
+│   Readme.md
+│
+├───archive
+│       project.zip
+│
+├───client
+│   │   Dockerfile
+│   │   Frontend Spec.md
+│   │   index.html
+│   │
+│   ├───indicators
+│   │       ma.js
+│   │       volume.js
+│   │
+│   └───js
+│           chart.js
+│           indicators.js
+│           main.js
+│           state.js
+│           tabs.js
+│           trading.js
+│           utils.js
+│           websocket.js
+│
+├───scripts
+│       archive_project.bat
+│       base64.md
+│       copy.bat
+│       generate_base64.bat
+│       paste.bat
+│       restart_service.bat
+│       start_service.bat
+│       status_service.bat
+│       stop_service.bat
+│       update.bat
+│
+├───services
+│   └───fetcher
+│       │   Backend Spec.md
+│       │   config.json
+│       │   debug_candles.py
+│       │   Dockerfile
+│       │   main.py
+│       │   readme.txt
+│       │   requirements.txt
+│       │
+│       └───__pycache__
+│               main.cpython-313.pyc
+│
+└───tasks
+        indicators_plugin_system.md
+        new_tab_button_fix.md
+        time_frame.md
