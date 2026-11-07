@@ -1,14 +1,14 @@
 // client/js/state.js
 
-const VERSION = "v7.7"; // Вдигаме версията за дебъг
+const VERSION = "v7.8"; // Празни места (gaps) в графиката, 1w от понеделник
 const PYTHON_SERVICE_URL = "http://127.0.0.1:8080";
 const FEE_RATE = 0.00075;
 
-const COLORS = { 
-    entry: '#3b82f6', 
-    tp: '#0ecb81', 
-    sl: '#f6465d', 
-    custom: '#f0b90b' 
+const COLORS = {
+    entry: '#3b82f6',
+    tp: '#0ecb81',
+    sl: '#f6465d',
+    custom: '#f0b90b'
 };
 
 let appState = {
@@ -29,7 +29,7 @@ let chartObj = null;
 let candleSeries = null;
 let wsConn = null;
 let isSwitchingTab = false;
-let activeIndicators = {}; 
+let activeIndicators = {};
 
 let labelTPEl = null;
 let labelSLEl = null;
