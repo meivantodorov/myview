@@ -1,35 +1,40 @@
 # Binance Micro-Terminal
 
-## 1. Визуализация на проблема и решението
-**Проблем:** Традиционните крипто борси (като Binance) имат сложни интерфейси, които не позволяват бързо управление на множество малки позиции с прецизен контрол върху риска (R:R). Освен това, директното дърпане на WebSocket данни от Binance за много табове натоварва браузъра и бързо удря rate limits.
-**Решение:** "Micro-Terminal" архитектура. Клиент-сървър модел, който работи изолирано в Docker контейнери. Python микросървиз агрегира, кешира и стриймва данни от Binance, а Frontend-ът (Single Page App), сервиран от Nginx, се грижи за визуализацията и локалната симулация на портфейла.
+A Dockerized Binance market-data service and browser-based chart/trading simulator.
 
-## 2. Технологичен стек (Dependencies)
-- **Backend:** Python 3.11, FastAPI, Uvicorn, `websockets`, `aiohttp`.
-- **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3, `lightweight-charts` (v4.1.1).
-- **Инфраструктура:** Docker, Docker Compose, Nginx.
+## Architecture
 
-## 🚀 3. Управление на проекта през Docker
-За да стартирате целия проект (Backend + Frontend) е нужно да имате инсталиран **Docker Desktop** и той да работи във фонов режим.
+- `services/fetcher/main.py` — FastAPI application, Binance REST/WebSocket orchestration, history API and diagnostics.
+- `services/fetcher/data/candles.sqlite3` — durable 1m OHLCV store; unique `(symbol, time)` key and idempotent UPSERT writes.
+- `client/js/state.js` — shared application state and configuration.
+- `client/js/tabs.js` — symbol tabs, timeframe preferences, history paging and live candle projection.
+- `client/js/chart.js` — chart creation, UTC bucket aggregation helpers and chart overlays.
+- `client/js/websocket.js` — browser WebSocket handling and chart interactions.
+- `client/indicators/` — indicator plugins (Volume and MA).
 
-Има готови предифинирани скриптове в директорията `/scripts`. Те позволяват стартиране, спиране, рестартиране и проверка на статус.
+## Candle lifecycle
 
-- **Стартиране:** `.\scripts\start_service.bat`
-- **Спиране:** `.\scripts\stop_service.bat`
-- **Статус:** `.\scripts\status_service.bat` (Трябва да виждате `binance_backend` и `binance_frontend` със статус `Up`)
-- **Логове:** `.\scripts\debug_service.bat`
+Binance REST is the source for historical closed 1m candles. On startup the service imports any legacy JSON cache, synchronizes the latest candles, backfills toward the earliest available Binance candle, repairs interior 1m gaps, then performs a final recent sync. Binance's 1m WebSocket updates the live candle in memory and writes it to SQLite only when the exchange marks it closed. SQLite UPSERT makes reconnects and overlapping REST pages safe.
 
-Frontend: http://localhost:3000
-Backend API & Diagnostics: http://localhost:8080
+All stored timestamps are UTC Unix seconds. Higher timeframes are aggregated on the backend from 1m rows using UTC epoch-aligned buckets. The history API returns chronological pages and an explicit `has_more` flag. The frontend fetches older pages as the user approaches the left edge and preserves the visible chart range when prepending data. Each symbol's selected timeframe is persisted separately in browser localStorage.
 
-## 4. Ключови архитектурни решения (Важно за разработчици)
-- **Timezones:** Binance връща UTC. За да съвпадат графиките 1:1 с локалното време на потребителя, се използва `TIMEZONE_OFFSET_SECONDS` в `state.js`. Той се прилага **само** във финалния етап на визуализацията, след като свещите са агрегирани в паметта.
-- **История и таймфреймове:** 1m свещите се съхраняват в SQLite (`services/fetcher/data/candles.sqlite3`) с уникален ключ по двойка и време. Старите JSON кешове се импортират автоматично при първо стартиране. Backend-ът агрегира 1m данните до избрания таймфрейм и връща страници от 1500 свещи. Frontend-ът зарежда следващата страница автоматично при приближаване до левия край на графиката, като запазва видимата позиция.
-- **Синхронизация:** При стартиране се допълват липсващите затворени 1m свещи, след което WebSocket подава текущата минута. Всяка окончателно затворена 1m свещ се записва в SQLite. Паралелно се изтегля по-старата история на порции до най-ранната налична свещ в Binance.
-- **Plugin System:** Индикаторите (Volume, MA) са изолирани в `/client/indicators/`. Всеки индикатор има свой `init`, `update`, `onConfigChange` и `destroy` методи, което позволява добавяне на нови индикатори без промяна по основния код.
-- **Local State:** Портфейлът и позициите се пазят изцяло в паметта на браузъра (`appState`). Backend-ът не знае за тях, което прави симулацията мигновена и сигурна.
+## Run
 
-## 5. Дебъгване
-- Бутонът **"📋 Debug Log"** в горния десен ъгъл копира JSON с текущото състояние (капитал, позиции, история, хешове). Това е най-бързият начин да проверите дали файловете са синхронизирани.
-- Ако графиката не зарежда, проверете дали Backend-ът има връзка с Binance чрез Diagnostics Dashboard-а на `http://localhost:8080`.
-- Всяка промяна по Frontend-а изисква вдигане на версията в `state.js` (напр. `v7.4` -> `v7.5`) и рестартиране на контейнерите.
+Requires Docker Desktop and Docker Compose:
+
+- Build/start: `docker compose up -d --build`
+- Stop: `docker compose down`
+- Status: `docker compose ps`
+- Backend logs: `docker compose logs -f backend`
+
+Frontend: http://localhost:3000  
+Backend diagnostics: http://localhost:8080
+
+## Diagnostics and API
+
+- `GET /api/diagnostics` — service, WebSocket, backfill and per-symbol storage state, including interior gap counts.
+- `GET /api/integrity` — backend source hash.
+- `GET /api/history/{symbol}?timeframe=1m&limit=1500` — newest history page.
+- `GET /api/history/{symbol}?timeframe=1d&limit=1500&before={oldest_time}` — previous page.
+
+See `tasks/time_frame.md` for the detailed history, recovery and pagination contract.

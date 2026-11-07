@@ -20,17 +20,6 @@ BACKEND_HASH = "UNKNOWN"
 DATA_DIR = "data"
 DB_PATH = os.path.join(DATA_DIR, "candles.sqlite3")
 TIMEFRAMES = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800}
-# Binance седмиците започват в понеделник, а Unix епохата започва в четвъртък (разлика 4 дни).
-WEEK_OFFSET = 345600
-
-
-def bucket_offset(sec: int) -> int:
-    return WEEK_OFFSET if sec == 604800 else 0
-
-
-def bucket_of(ts: int, sec: int) -> int:
-    off = bucket_offset(sec)
-    return ((int(ts) - off) // sec) * sec + off
 
 
 def calculate_hash():
@@ -47,7 +36,7 @@ def calculate_hash():
 state = {
     "config": {}, "candles": {}, "connections": {}, "logs": [],
     "start_time": time.time(), "ws_reconnect_count": 0,
-    "last_message_time": None, "clients": set(), "backfill": {}, "history_gaps": {}
+    "last_message_time": None, "clients": set(), "backfill": {}
 }
 
 
@@ -95,31 +84,48 @@ def db_bounds(symbol: str):
         return conn.execute("SELECT MIN(time), MAX(time), COUNT(*) FROM candles WHERE symbol=?", (symbol,)).fetchone()
 
 
-def find_history_gaps(symbol: str, limit: int = 10000):
-    """Return missing 1m intervals between stored candles (timestamps are seconds)."""
+def find_candle_gaps(symbol: str, max_gaps: int = 10000):
+    """Return missing 1m ranges between stored closed candles (UTC seconds)."""
     with db_connect() as conn:
         rows = conn.execute("""
-            SELECT candle_time, next_time
+            SELECT prev_time + 60 AS gap_start, time - 60 AS gap_end
             FROM (
-                SELECT time AS candle_time,
-                       LEAD(time) OVER (ORDER BY time) AS next_time
+                SELECT time, LAG(time) OVER (ORDER BY time) AS prev_time
                 FROM candles WHERE symbol=?
             )
-            WHERE next_time IS NOT NULL AND next_time > candle_time + 60
-            ORDER BY candle_time LIMIT ?
-        """, (symbol, limit)).fetchall()
-    return [(int(left), int(right)) for left, right in rows]
+            WHERE prev_time IS NOT NULL AND time - prev_time > 60
+            ORDER BY gap_start LIMIT ?
+        """, (symbol, max_gaps)).fetchall()
+    return [(int(a), int(b)) for a, b in rows if a <= b]
 
 
-def count_history_gaps(symbol: str):
-    with db_connect() as conn:
-        row = conn.execute("""
-            SELECT COUNT(*) FROM (
-                SELECT time, LEAD(time) OVER (ORDER BY time) AS next_time
-                FROM candles WHERE symbol=?
-            ) WHERE next_time IS NOT NULL AND next_time > time + 60
-        """, (symbol,)).fetchone()
-    return int(row[0] or 0)
+async def repair_candle_gaps(session, symbol):
+    """Fetch missing closed 1m candles in bounded Binance API pages."""
+    gaps = find_candle_gaps(symbol)
+    repaired = 0
+    now_ms = int(time.time() * 1000)
+    for gap_start, gap_end in gaps:
+        cursor_ms = gap_start * 1000
+        end_ms = gap_end * 1000
+        while cursor_ms <= end_ms:
+            candles, raw = await fetch_binance_klines(
+                session, symbol, start_time=cursor_ms, end_time=end_ms, limit=1000
+            )
+            if not raw:
+                break
+            closed = [c for c, k in zip(candles, raw) if int(k[6]) < now_ms]
+            if closed:
+                upsert_candles(symbol, closed)
+                repaired += len(closed)
+            next_cursor = int(raw[-1][0]) + 60000
+            if next_cursor <= cursor_ms or len(raw) < 1000:
+                break
+            cursor_ms = next_cursor
+            await asyncio.sleep(0.15)
+    if repaired:
+        state["candles"][symbol] = read_latest(symbol)
+    log_event(f"{symbol}: проверени {len(gaps)} вътрешни пропуска; възстановени {repaired} свещи.")
+    return repaired
 
 
 def read_latest(symbol: str, limit: int = 2500):
@@ -218,12 +224,7 @@ async def fetch_binance_klines(session, symbol, interval="1m", start_time=None, 
 
 async def sync_recent_history(session, symbol):
     _, latest, _ = db_bounds(symbol)
-    if latest is None:
-        # Празна база: НЕ тръгваме от 0 (2017 г.), а от последните 2 дни.
-        # По-старата история се дърпа назад от backfill_symbol.
-        cursor_ms = int((time.time() - 2 * 86400) * 1000)
-    else:
-        cursor_ms = int(latest) * 1000
+    cursor_ms = max(0, (latest or 0) * 1000)
     total = 0
     while True:
         candles, raw = await fetch_binance_klines(session, symbol, start_time=cursor_ms, limit=1000)
@@ -247,12 +248,14 @@ async def sync_recent_history(session, symbol):
 
 
 async def backfill_symbol(symbol):
-    """Fetch candles older than the oldest locally stored candle."""
-    state["backfill"][symbol] = "backfill_oldest"
+    state["backfill"][symbol] = "running"
     async with aiohttp.ClientSession() as session:
         while True:
-            oldest, _, _ = db_bounds(symbol)
-            end_ms = int(time.time() * 1000) if oldest is None else int(oldest) * 1000 - 1
+            oldest, _, count = db_bounds(symbol)
+            if oldest is None:
+                end_ms = int(time.time() * 1000)
+            else:
+                end_ms = int(oldest) * 1000 - 1
             if end_ms <= 0:
                 break
             _, raw = await fetch_binance_klines(session, symbol, end_time=end_ms, limit=1000)
@@ -262,93 +265,22 @@ async def backfill_symbol(symbol):
             batch = [{"time": k[0] // 1000, "open": float(k[1]), "high": float(k[2]), "low": float(k[3]), "close": float(k[4]), "volume": float(k[5])} for k in raw if int(k[6]) < now_ms]
             if not batch:
                 break
-            before_oldest = oldest
             upsert_candles(symbol, batch)
-            new_oldest = db_bounds(symbol)[0]
             state["candles"][symbol] = read_latest(symbol)
-            if new_oldest is None or (before_oldest is not None and new_oldest >= before_oldest):
-                log_event(f"{symbol}: backfill stopped because oldest timestamp did not move.", "WARN")
+            if len(batch) < 1000:
                 break
-            if len(raw) < 1000:
-                break
-            await asyncio.sleep(0.15)
-
-
-async def fill_internal_history_gaps(symbol):
-    """Fill missing 1m intervals between stored rows; repeat until no progress remains."""
-    oldest, latest, count = db_bounds(symbol)
-    if not count:
-        state["history_gaps"][symbol] = None
-        state["backfill"][symbol] = "partial"
-        log_event(f"{symbol}: няма налични локални свещи; синхронизацията не може да се маркира complete.", "WARN")
-        return
-
-    state["backfill"][symbol] = "filling_gaps"
-    previous_remaining = None
-    async with aiohttp.ClientSession() as session:
-        while True:
-            gaps = find_history_gaps(symbol, limit=10000)
-            if not gaps:
-                state["history_gaps"][symbol] = 0
-                state["backfill"][symbol] = "complete"
-                log_event(f"{symbol}: историческата 1m база е непрекъсната. Общо {db_bounds(symbol)[2]} свещи.", "SUCCESS")
-                return
-
-            state["history_gaps"][symbol] = len(gaps)
-            log_event(f"{symbol}: открити поне {len(gaps)} вътрешни исторически пропуска; започва попълване.", "INFO")
-            # Най-новите пропуски първо, и в рамките на пропуск - отзад напред.
-            # Така последната история става непрекъсната веднага, а старите "острови" остават най-накрая.
-            for left_time, right_time in reversed(gaps):
-                lower_ms = (left_time + 60) * 1000
-                cursor_end_ms = right_time * 1000 - 1
-                while cursor_end_ms >= lower_ms:
-                    _, raw = await fetch_binance_klines(session, symbol, end_time=cursor_end_ms, limit=1000)
-                    if not raw:
-                        # Binance няма свещи в този интервал; финалният одит ще запази пропуска.
-                        break
-
-                    now_ms = int(time.time() * 1000)
-                    batch = [
-                        {"time": k[0] // 1000, "open": float(k[1]), "high": float(k[2]),
-                         "low": float(k[3]), "close": float(k[4]), "volume": float(k[5])}
-                        for k in raw
-                        if lower_ms <= int(k[0]) <= cursor_end_ms and int(k[6]) < now_ms
-                    ]
-                    if batch:
-                        upsert_candles(symbol, batch)
-
-                    first_open_ms = int(raw[0][0])
-                    if first_open_ms <= lower_ms or first_open_ms > cursor_end_ms:
-                        break
-                    cursor_end_ms = first_open_ms - 1
-                    if len(raw) < 1000:
-                        break
-                    await asyncio.sleep(0.12)
-
-                state["candles"][symbol] = read_latest(symbol)
-
-            remaining = count_history_gaps(symbol)
-            state["history_gaps"][symbol] = remaining
-            if remaining == 0:
-                state["backfill"][symbol] = "complete"
-                log_event(f"{symbol}: историческата 1m база е непрекъсната. Общо {db_bounds(symbol)[2]} свещи.", "SUCCESS")
-                return
-            if previous_remaining is not None and remaining >= previous_remaining:
-                state["backfill"][symbol] = "partial"
-                log_event(f"{symbol}: остават {remaining} пропуска, без допълнителен прогрес от Binance.", "WARN")
-                return
-            previous_remaining = remaining
+            await asyncio.sleep(0.5)
+    state["backfill"][symbol] = "complete"
+    log_event(f"{symbol}: историческото изтегляне назад приключи. Най-стара свещ: {db_bounds(symbol)[0]}.", "SUCCESS")
 
 
 async def synchronize_symbol(symbol):
-    try:
-        async with aiohttp.ClientSession() as session:
-            await sync_recent_history(session, symbol)
+    async with aiohttp.ClientSession() as session:
+        await sync_recent_history(session, symbol)
         await backfill_symbol(symbol)
-        await fill_internal_history_gaps(symbol)
-    except Exception as exc:
-        state["backfill"][symbol] = "error"
-        log_event(f"{symbol}: историческата синхронизация се провали: {exc}", "ERROR")
+        await repair_candle_gaps(session, symbol)
+        # Catch up again after a long backfill so the newest closed bars are current.
+        await sync_recent_history(session, symbol)
 
 
 async def init_history():
@@ -359,7 +291,6 @@ async def init_history():
             log_event(f"{symbol}: импортирани {imported} стари свещи в SQLite.", "SUCCESS")
         state["candles"][symbol] = read_latest(symbol)
         state["backfill"][symbol] = "syncing"
-        state["history_gaps"][symbol] = None
 
 
 class BinanceWSManager:
@@ -446,68 +377,26 @@ async def get_history(symbol: str, timeframe: str = Query("1m"), limit: int = Qu
         return JSONResponse(status_code=400, content={"error": "Unsupported timeframe"})
     if symbol not in state["config"].get("symbols", []):
         return JSONResponse(status_code=404, content={"error": "Symbol not found"})
-
     sec = TIMEFRAMES[timeframe]
     oldest, latest, _ = db_bounds(symbol)
     if oldest is None:
-        return {"candles": [], "has_more": False, "oldest_time": None, "total_candles": 0}
-
-    off = bucket_offset(sec)
-    end_bucket = bucket_of(int(before) - 1, sec) if before is not None else bucket_of(latest, sec)
+        return {"candles": [], "has_more": False, "oldest_time": None}
+    end_bucket = ((int(before) - 1) // sec) * sec if before is not None else (int(latest) // sec) * sec
     start_bucket = end_bucket - (limit - 1) * sec
     end_exclusive = end_bucket + sec
-
     with db_connect() as conn:
         rows = conn.execute("""
-            WITH grouped AS (
-                SELECT ((time - ?) / ?) * ? + ? AS bucket,
-                       MIN(time) AS first_time, MAX(time) AS last_time,
-                       MAX(high) AS high, MIN(low) AS low, SUM(volume) AS volume
-                FROM candles
-                WHERE symbol=? AND time>=? AND time<?
-                GROUP BY bucket
-            )
-            SELECT g.bucket, first.open, g.high, g.low, last.close, g.volume
-            FROM grouped g
-            JOIN candles first ON first.symbol=? AND first.time=g.first_time
-            JOIN candles last ON last.symbol=? AND last.time=g.last_time
-            ORDER BY g.bucket ASC
-        """, (off, sec, sec, off, symbol, start_bucket, end_exclusive, symbol, symbol)).fetchall()
-
-        # During gap repair a whole time window can temporarily contain no rows.
-        # Fall back to the nearest older available buckets instead of returning an empty page.
-        if not rows and before is not None:
-            rows = conn.execute("""
-                WITH grouped AS (
-                    SELECT ((time - ?) / ?) * ? + ? AS bucket,
-                           MIN(time) AS first_time, MAX(time) AS last_time,
-                           MAX(high) AS high, MIN(low) AS low, SUM(volume) AS volume
-                    FROM candles
-                    WHERE symbol=? AND time<?
-                    GROUP BY bucket ORDER BY bucket DESC LIMIT ?
-                )
-                SELECT g.bucket, first.open, g.high, g.low, last.close, g.volume
-                FROM grouped g
-                JOIN candles first ON first.symbol=? AND first.time=g.first_time
-                JOIN candles last ON last.symbol=? AND last.time=g.last_time
-                ORDER BY g.bucket ASC
-            """, (off, sec, sec, off, symbol, start_bucket, limit, symbol, symbol)).fetchall()
-
-        total_candles = ((bucket_of(latest, sec) - bucket_of(oldest, sec)) // sec) + 1
-
+            SELECT CAST(c.time / ? AS INTEGER) * ? AS bucket,
+                   (SELECT x.open FROM candles x WHERE x.symbol=c.symbol AND x.time >= CAST(c.time / ? AS INTEGER) * ? AND x.time < CAST(c.time / ? AS INTEGER) * ? + ? ORDER BY x.time ASC LIMIT 1) AS o,
+                   MAX(c.high), MIN(c.low),
+                   (SELECT x.close FROM candles x WHERE x.symbol=c.symbol AND x.time >= CAST(c.time / ? AS INTEGER) * ? AND x.time < CAST(c.time / ? AS INTEGER) * ? + ? ORDER BY x.time DESC LIMIT 1) AS cl,
+                   SUM(c.volume)
+            FROM candles c WHERE c.symbol=? AND c.time>=? AND c.time<?
+            GROUP BY bucket ORDER BY bucket ASC
+        """, (sec, sec, sec, sec, sec, sec, sec, sec, sec, sec, sec, sec, symbol, start_bucket, end_exclusive)).fetchall()
+        has_more = conn.execute("SELECT 1 FROM candles WHERE symbol=? AND time<? LIMIT 1", (symbol, start_bucket)).fetchone() is not None
     candles = [{"time": int(r[0]), "open": r[1], "high": r[2], "low": r[3], "close": r[4], "volume": r[5]} for r in rows]
-    page_oldest = candles[0]["time"] if candles else start_bucket
-    with db_connect() as conn:
-        has_more = conn.execute(
-            "SELECT 1 FROM candles WHERE symbol=? AND time<? LIMIT 1", (symbol, page_oldest)
-        ).fetchone() is not None
-    return {
-        "candles": candles,
-        "has_more": has_more,
-        "oldest_time": candles[0]["time"] if candles else None,
-        "total_candles": int(total_candles or 0),
-        "backfill": state["backfill"].get(symbol, "pending"),
-    }
+    return {"candles": candles, "has_more": has_more, "oldest_time": candles[0]["time"] if candles else None}
 
 
 @app.get("/api/integrity")
@@ -538,7 +427,7 @@ async def dashboard():
 @app.get("/api/diagnostics")
 async def get_diagnostics():
     age = f"{int(time.time() - state['last_message_time'])}s ago" if state["last_message_time"] else "N/A"
-    return {"config": state["config"], "connections": state["connections"], "logs": state["logs"], "uptime": int(time.time() - state["start_time"]), "clients_count": len(state["clients"]), "ws_reconnect_count": state["ws_reconnect_count"], "last_msg_ago": age, "hash": BACKEND_HASH, "backfill": state["backfill"], "storage": {s: {"oldest": db_bounds(s)[0], "latest": db_bounds(s)[1], "count": db_bounds(s)[2], "gaps": state["history_gaps"].get(s)} for s in state["config"].get("symbols", [])}}
+    return {"config": state["config"], "connections": state["connections"], "logs": state["logs"], "uptime": int(time.time() - state["start_time"]), "clients_count": len(state["clients"]), "ws_reconnect_count": state["ws_reconnect_count"], "last_msg_ago": age, "hash": BACKEND_HASH, "backfill": state["backfill"], "storage": {s: {"oldest": db_bounds(s)[0], "latest": db_bounds(s)[1], "count": db_bounds(s)[2], "internal_gaps": len(find_candle_gaps(s))} for s in state["config"].get("symbols", [])}}
 
 
 @app.post("/api/config")
