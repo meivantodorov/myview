@@ -16,38 +16,34 @@ async function calculateClientHash() {
 
 async function checkIntegrity() {
     const tagEl = document.getElementById('integrityTag');
-    tagEl.innerHTML = "Изчисляване на хешове...";
+    if (!tagEl) return;
+    tagEl.textContent = "Проверка на Candle Service...";
     tagEl.style.color = 'var(--yellow)';
     tagEl.style.borderColor = 'var(--yellow)';
 
     CLIENT_HASH = await calculateClientHash();
-
     try {
-        const res = await fetch(`${PYTHON_SERVICE_URL}/api/integrity`);
-        if (res.ok) {
-            const data = await res.json();
-            BACKEND_HASH = data.hash;
-        } else {
-            BACKEND_HASH = "OFFLINE";
-        }
-    } catch (e) {
-        BACKEND_HASH = "OFFLINE";
-    }
-
-    if (BACKEND_HASH === "OFFLINE") {
-        tagEl.innerHTML = `❌ Backend Offline<br>Client: ${CLIENT_HASH.substring(0, 8)}...`;
-        tagEl.style.color = 'var(--red)';
-        tagEl.style.borderColor = 'var(--red)';
-    } else {
-        tagEl.innerHTML = `✅ ${VERSION}<br>C: ${CLIENT_HASH.substring(0, 8)}... | B: ${BACKEND_HASH.substring(0, 8)}...`;
+        const res = await fetch(`${PYTHON_SERVICE_URL}/health/ready`);
+        if (!res.ok) throw new Error(`Health HTTP ${res.status}`);
+        const data = await res.json();
+        BACKEND_HASH = data.status || 'UNKNOWN';
+        if (data.status !== 'ready' || !data.database) throw new Error('Service is not ready');
+        const workers = Array.isArray(data.active_workers) ? data.active_workers.length : 0;
+        tagEl.textContent = `✓ Candle Service Ready\n${workers} active workers`;
         tagEl.style.color = 'var(--green)';
         tagEl.style.borderColor = 'var(--green)';
+    } catch (e) {
+        BACKEND_HASH = 'OFFLINE';
+        tagEl.textContent = `✕ Candle Service Offline\n${e.message}`;
+        tagEl.style.color = 'var(--red)';
+        tagEl.style.borderColor = 'var(--red)';
+        console.error('[Candle Service] Health check failed', e);
     }
 }
 
 function copyDebugLog() {
     const logData = {
-        integrity: { client: CLIENT_HASH, backend: BACKEND_HASH, version: VERSION },
+        integrity: { client: CLIENT_HASH, backend: BACKEND_HASH, version: VERSION, serviceUrl: PYTHON_SERVICE_URL, websocket: wsConn ? wsConn.readyState : 'not-created' },
         indicators: Object.keys(activeIndicators),
         volumeConfig: window.Indicators.Volume ? window.Indicators.Volume.config : null,
         appState: { capital: appState.capital, posPct: appState.posPct, maxPos: appState.maxPos, activeTabId: appState.activeTabId, realizedPnl: appState.realizedPnl },

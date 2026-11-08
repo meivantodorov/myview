@@ -1,7 +1,10 @@
 // client/js/state.js
 
-const VERSION = "v8.0"; // Modular history and pagination fixes
-const PYTHON_SERVICE_URL = "http://127.0.0.1:8080";
+const VERSION = "v9.0"; // Binance Candle Service adapter + paged history
+const PYTHON_SERVICE_URL = "http://127.0.0.1:8000";
+const CANDLE_SERVICE_WS_URL = "ws://127.0.0.1:8000/ws";
+// Leave empty when API_KEY in the Candle Service .env is empty.
+const CANDLE_SERVICE_API_KEY = "";
 const FEE_RATE = 0.00075;
 
 const COLORS = { 

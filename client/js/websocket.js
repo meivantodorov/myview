@@ -2,33 +2,87 @@
 
 let dragging = null;
 
+let wsSubscriptions = new Set();
+let wsReconnectDelay = 1000;
+let wsReconnectTimer = null;
+
+function sendTabSubscription(tab) {
+    if (!tab || !tab.registered || !wsConn || wsConn.readyState !== WebSocket.OPEN) return;
+    const key = `${tab.symbol}:${tab.timeframe}`;
+    if (wsSubscriptions.has(key)) return;
+    wsConn.send(JSON.stringify({ symbol: tab.symbol, timeframe: tab.timeframe }));
+    wsSubscriptions.add(key);
+}
+
+function subscribeTabToService(tab) {
+    if (wsConn && wsConn.readyState === WebSocket.OPEN) sendTabSubscription(tab);
+}
+
+function sendAllTabSubscriptions() {
+    appState.tabs.forEach(sendTabSubscription);
+}
+
 function initWebSocket() {
-    if (wsConn) wsConn.close();
-    wsConn = new WebSocket(`ws://127.0.0.1:8080/ws/stream`);
-    
-    wsConn.onopen = () => console.log("Свързан към Python WS Stream");
-    
+    if (wsConn && (wsConn.readyState === WebSocket.OPEN || wsConn.readyState === WebSocket.CONNECTING)) return;
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    try {
+        wsConn = new WebSocket(CANDLE_SERVICE_WS_URL);
+    } catch (e) {
+        console.error('[Candle Service] WebSocket initialization failed', e);
+        scheduleWebSocketReconnect();
+        return;
+    }
+
+    wsConn.onopen = () => {
+        console.info('[Candle Service] Client WebSocket connected');
+        wsReconnectDelay = 1000;
+        wsSubscriptions = new Set();
+        sendAllTabSubscriptions();
+    };
+
     wsConn.onmessage = (ev) => {
         try {
-            if (isSwitchingTab) return;
             const msg = JSON.parse(ev.data);
-            if (!msg.symbol || !msg.candle) return;
-            
-            const tab = appState.tabs.find(t => t.symbol === msg.symbol);
-            if (!tab) return;
-
-            const adjustedCandle = { ...msg.candle, time: msg.candle.time + TIMEZONE_OFFSET_SECONDS };
-            tab.currentPrice = adjustedCandle.close;
-            if (appState.activeTabId === tab.id && candleSeries) {
-                applyLiveCandle(tab, msg.candle);
-                document.getElementById('chartLivePrice').textContent = adjustedCandle.close.toFixed(2) + ' USDT';
-                updateBpsOverlay();
+            if (msg.type === 'CONNECTED') { sendAllTabSubscriptions(); return; }
+            if (msg.type === 'SUBSCRIBED') {
+                console.info(`[Candle Service] Subscribed ${msg.symbol} ${msg.timeframe}`);
+                return;
             }
-            checkTabTPSL(tab, adjustedCandle.close);
+            if (msg.type === 'ERROR') {
+                console.warn('[Candle Service] WebSocket error:', msg.message);
+                return;
+            }
+            if (msg.type === 'HISTORY_BURST') return; // HTTP paging is authoritative; WS is used for live updates.
+            if (!['CANDLE_UPDATE', 'CANDLE_UPDATED'].includes(msg.type) || !msg.symbol || !msg.candle) return;
+
+            const tab = appState.tabs.find(t => t.symbol === msg.symbol && t.timeframe === msg.timeframe);
+            if (!tab) return;
+            const normalized = normalizeServiceCandle(msg.candle);
+            if (!normalized) return;
+            applyServerCandle(tab, normalized);
+            checkTabTPSL(tab, normalized.close);
             if (appState.activeTabId === tab.id) updateActiveTabUI();
             updateGlobalStats();
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error('[Candle Service] Invalid WebSocket message', e);
+        }
     };
+
+    wsConn.onerror = (e) => console.warn('[Candle Service] WebSocket connection error', e);
+    wsConn.onclose = () => {
+        wsSubscriptions = new Set();
+        scheduleWebSocketReconnect();
+    };
+}
+
+function scheduleWebSocketReconnect() {
+    if (wsReconnectTimer) return;
+    const wait = wsReconnectDelay;
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 15000);
+    wsReconnectTimer = setTimeout(() => {
+        wsReconnectTimer = null;
+        initWebSocket();
+    }, wait);
 }
 
 function initDragAndDrop() {
