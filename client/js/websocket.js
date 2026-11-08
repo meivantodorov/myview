@@ -18,6 +18,18 @@ function subscribeTabToService(tab) {
     if (wsConn && wsConn.readyState === WebSocket.OPEN) sendTabSubscription(tab);
 }
 
+// The service protocol has subscribe but no unsubscribe message.
+// Reconnect on timeframe changes to clear stale server-side subscriptions safely.
+function resetWebSocketSubscriptions() {
+    wsSubscriptions = new Set();
+    if (wsConn && (wsConn.readyState === WebSocket.OPEN || wsConn.readyState === WebSocket.CONNECTING)) {
+        try { wsConn.close(1000, 'timeframe changed'); }
+        catch (e) { console.warn('[Candle Service] WebSocket reset failed', e); }
+    } else {
+        initWebSocket();
+    }
+}
+
 function sendAllTabSubscriptions() {
     appState.tabs.forEach(sendTabSubscription);
 }

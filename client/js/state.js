@@ -1,6 +1,6 @@
 // client/js/state.js
 
-const VERSION = "v9.0"; // Binance Candle Service adapter + paged history
+const VERSION = "v9.1"; // Binance Candle Service adapter + paged history
 const PYTHON_SERVICE_URL = "http://127.0.0.1:8000";
 const CANDLE_SERVICE_WS_URL = "ws://127.0.0.1:8000/ws";
 // Leave empty when API_KEY in the Candle Service .env is empty.
@@ -22,9 +22,6 @@ let appState = {
     activeTabId: null,
     realizedPnl: 0,
 };
-
-let CLIENT_HASH = "UNKNOWN";
-let BACKEND_HASH = "UNKNOWN";
 
 let TIMEZONE_OFFSET_SECONDS = -new Date().getTimezoneOffset() * 60;
 

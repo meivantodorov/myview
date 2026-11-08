@@ -18,6 +18,72 @@ function saveTimeframeFor(symbol, timeframe) {
 
 const CANDLE_HISTORY_PAGE_SIZE = 1500;
 const CANDLE_HISTORY_PREFETCH_PAGES = 2;
+const CANDLE_CACHE_DB = 'binance-micro-terminal-cache';
+const CANDLE_CACHE_STORE = 'histories';
+const CANDLE_CACHE_MAX_CANDLES = 100000;
+const candleCacheWriteTimers = new Map();
+let candleCacheDbPromise = null;
+
+// IndexedDB keeps large candle histories without blocking the UI or exhausting localStorage.
+function openCandleCache() {
+    if (!('indexedDB' in window)) return Promise.resolve(null);
+    if (candleCacheDbPromise) return candleCacheDbPromise;
+    candleCacheDbPromise = new Promise(resolve => {
+        const request = indexedDB.open(CANDLE_CACHE_DB, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(CANDLE_CACHE_STORE)) db.createObjectStore(CANDLE_CACHE_STORE, { keyPath: 'key' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => { console.warn('[Cache] IndexedDB unavailable:', request.error); resolve(null); };
+        request.onblocked = () => resolve(null);
+    });
+    return candleCacheDbPromise;
+}
+
+async function readCandleCache(symbol, timeframe) {
+    const db = await openCandleCache();
+    if (!db) return null;
+    return new Promise(resolve => {
+        try {
+            const request = db.transaction(CANDLE_CACHE_STORE, 'readonly').objectStore(CANDLE_CACHE_STORE).get(`${symbol}|${timeframe}`);
+            request.onsuccess = () => {
+                const record = request.result;
+                const candles = Array.isArray(record?.candles) ? record.candles.map(normalizeServiceCandle).filter(Boolean) : [];
+                resolve(candles.length ? { candles, savedAt: record.savedAt || 0 } : null);
+            };
+            request.onerror = () => resolve(null);
+        } catch (_) { resolve(null); }
+    });
+}
+
+async function writeCandleCache(symbol, timeframe, sourceCandles) {
+    const db = await openCandleCache();
+    if (!db || !sourceCandles?.length) return;
+    const candles = sourceCandles.slice(-CANDLE_CACHE_MAX_CANDLES);
+    return new Promise(resolve => {
+        try {
+            const tx = db.transaction(CANDLE_CACHE_STORE, 'readwrite');
+            tx.objectStore(CANDLE_CACHE_STORE).put({ key: `${symbol}|${timeframe}`, savedAt: Date.now(), candles });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = tx.onabort = () => resolve(false);
+        } catch (_) { resolve(false); }
+    });
+}
+
+function scheduleCandleCacheSave(tab) {
+    if (!tab?.rawCandles?.length) return;
+    const symbol = tab.symbol;
+    const timeframe = tab.timeframe;
+    const snapshot = tab.rawCandles.slice(-CANDLE_CACHE_MAX_CANDLES);
+    const key = `${symbol}|${timeframe}`;
+    const oldTimer = candleCacheWriteTimers.get(key);
+    if (oldTimer) clearTimeout(oldTimer);
+    candleCacheWriteTimers.set(key, setTimeout(() => {
+        candleCacheWriteTimers.delete(key);
+        void writeCandleCache(symbol, timeframe, snapshot);
+    }, 1200));
+}
 
 function candleServiceHeaders(extra = {}) {
     const headers = { ...extra };
@@ -207,6 +273,10 @@ function setTimeframe(tf) {
         btn.classList.toggle('active', btn.dataset.tf === tf);
     });
 
+    if (typeof resetWebSocketSubscriptions === 'function') {
+        resetWebSocketSubscriptions();
+    }
+
     Object.keys(activeIndicators).forEach(indId => {
         window.Indicators[indId].destroy(chartObj, activeIndicators[indId].refs);
         const ind = window.Indicators[indId];
@@ -241,74 +311,134 @@ function rebuildIndicators(data) {
     });
 }
 
-async function fetchHistoryAndRender(tab, isNewLoad = false) {
-    const startTime = performance.now();
-    let requestId = null;
-    try {
-        requestId = tab.historyRequestId = (tab.historyRequestId || 0) + 1;
-        const requestedTimeframe = tab.timeframe;
-        tab.historyLoading = true;
-        if (isNewLoad) tab.loadingOlder = false;
+function renderCachedCandles(tab, candles, isNewLoad) {
+    tab.rawCandles = mergeCandlesByTime([], candles);
+    tab.oldestTime = tab.rawCandles[0]?.time ?? null;
+    tab.hasMore = true;
+    tab.totalCandles = tab.rawCandles.length;
+    tab.liveMinuteTime = null;
+    tab.liveBaseVolume = 0;
+    const data = chartDataFor(tab);
+    if (candleSeries && appState.activeTabId === tab.id) {
+        candleSeries.setData(data);
+        rebuildIndicators(data);
+    }
+    debugStats.loadedCandles = tab.rawCandles.length;
+    debugStats.totalBackendCandles = tab.rawCandles.length;
+    debugStats.currentBatches = Math.max(1, Math.ceil(tab.rawCandles.length / CANDLE_HISTORY_PAGE_SIZE));
+    debugStats.totalBatches = '∞';
+    const last = data[data.length - 1];
+    if (last) {
+        tab.currentPrice = last.close;
+        if (appState.activeTabId === tab.id) {
+            const priceEl = document.getElementById('chartLivePrice');
+            if (priceEl) priceEl.textContent = tab.currentPrice.toFixed(2) + ' USDT';
+        }
+    }
+    if (isNewLoad && appState.activeTabId === tab.id) resetChartToLatest();
+    if (appState.activeTabId === tab.id) updateActiveTabUI();
+    updateDebugPanel();
+}
 
+async function fetchHistoryAndRender(tab, isNewLoad = false) {
+    const started = performance.now();
+    const requestId = tab.historyRequestId = (tab.historyRequestId || 0) + 1;
+    const requestedTimeframe = tab.timeframe;
+    tab.historyLoading = true;
+    if (isNewLoad) tab.loadingOlder = false;
+
+    // Paint the previously saved history first. The network refresh runs afterwards.
+    try {
+        const cached = await readCandleCache(tab.symbol, requestedTimeframe);
+        if (appState.activeTabId !== tab.id || requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
+        if (cached?.candles?.length) {
+            renderCachedCandles(tab, cached.candles, isNewLoad);
+            tab.historyLoading = false;
+            debugStats.initialLoadTime = (performance.now() - started) / 1000;
+            updateDebugPanel();
+            // A stale cache is intentionally displayed immediately; latest candles are reconciled in background.
+            void refreshHistoryFromService(tab, requestId, requestedTimeframe, isNewLoad);
+            return;
+        }
+    } catch (e) {
+        console.warn('[Cache] Read failed; falling back to network:', e);
+    }
+
+    await refreshHistoryFromService(tab, requestId, requestedTimeframe, isNewLoad);
+    if (requestId === tab.historyRequestId) {
+        tab.historyLoading = false;
+        debugStats.initialLoadTime = (performance.now() - started) / 1000;
+        updateDebugPanel();
+    }
+}
+
+async function refreshHistoryFromService(tab, requestId, requestedTimeframe, isNewLoad) {
+    try {
         await ensureSymbolRegistered(tab);
+        if (requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
         if (typeof subscribeTabToService === 'function') subscribeTabToService(tab);
 
         let payload = null;
-        // Aggregated timeframes may need a moment while the service drains its durable aggregation queue.
         for (let attempt = 0; attempt < 10; attempt++) {
             const res = await candleServiceFetch(`/candles/${encodeURIComponent(tab.symbol)}/latest?timeframe=${encodeURIComponent(requestedTimeframe)}&limit=${CANDLE_HISTORY_PAGE_SIZE}`);
             if (!res.ok) throw new Error(`History HTTP ${res.status}: ${await res.text()}`);
             payload = await res.json();
-            if (payload.candles && payload.candles.length) break;
+            if (payload.candles?.length) break;
             if (attempt < 9) await historyDelay(500);
-            if (appState.activeTabId !== tab.id || requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
+            if (requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
         }
+        if (requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
 
-        if (appState.activeTabId !== tab.id || requestId !== tab.historyRequestId || requestedTimeframe !== tab.timeframe) return;
-        const rawCandles = (payload?.candles || []).map(normalizeServiceCandle).filter(Boolean);
-        if (!rawCandles.length) {
-            if (isNewLoad) {
-                tab.rawCandles = [];
-                tab.oldestTime = null;
-                tab.hasMore = true; // The service may still be backfilling or aggregating this timeframe.
-                tab.totalCandles = 0;
-                if (candleSeries) candleSeries.setData([]);
-            }
-            console.warn(`[Candle Service] No ${requestedTimeframe} candles yet for ${tab.symbol}; retry after sync catches up.`);
+        const incoming = (payload?.candles || []).map(normalizeServiceCandle).filter(Boolean);
+        if (!incoming.length) {
+            console.warn(`[Candle Service] No ${requestedTimeframe} candles yet for ${tab.symbol}.`);
             return;
         }
 
-        tab.rawCandles = mergeCandlesByTime([], rawCandles);
-        tab.liveMinuteTime = null;
-        tab.liveBaseVolume = 0;
-        tab.oldestTime = tab.rawCandles[0].time;
-        tab.hasMore = true; // Older pages are fetched lazily; the service backfills Binance history in the background.
+        const previous = tab.rawCandles || [];
+        const previousByTime = new Map(previous.map(c => [c.time, c]));
+        let changed = previous.length === 0;
+        for (const c of incoming) {
+            const old = previousByTime.get(c.time);
+            if (!old || old.open !== c.open || old.high !== c.high || old.low !== c.low || old.close !== c.close || old.volume !== c.volume) {
+                changed = true;
+                break;
+            }
+        }
+        tab.rawCandles = mergeCandlesByTime(previous, incoming);
+        tab.oldestTime = tab.rawCandles[0]?.time ?? null;
+        tab.hasMore = true;
         tab.totalCandles = tab.rawCandles.length;
-        const chartData = chartDataFor(tab);
-        if (candleSeries) candleSeries.setData(chartData);
-        rebuildIndicators(chartData);
 
-        debugStats.loadedCandles = rawCandles.length;
-        debugStats.totalBackendCandles = rawCandles.length;
-        debugStats.currentBatches = 1;
+        if (changed && appState.activeTabId === tab.id && candleSeries) {
+            const data = chartDataFor(tab);
+            candleSeries.setData(data);
+            rebuildIndicators(data);
+        }
+        const last = tab.rawCandles[tab.rawCandles.length - 1];
+        if (last) {
+            tab.currentPrice = last.close;
+            if (appState.activeTabId === tab.id) {
+                const priceEl = document.getElementById('chartLivePrice');
+                if (priceEl) priceEl.textContent = tab.currentPrice.toFixed(2) + ' USDT';
+                updateActiveTabUI();
+            }
+        }
+        debugStats.loadedCandles = tab.rawCandles.length;
+        debugStats.totalBackendCandles = Number(payload.count) || tab.rawCandles.length;
+        debugStats.currentBatches = Math.max(1, Math.ceil(tab.rawCandles.length / CANDLE_HISTORY_PAGE_SIZE));
         debugStats.totalBatches = '∞';
-
-        const last = chartData[chartData.length - 1];
-        tab.currentPrice = last.close;
-        const priceEl = document.getElementById('chartLivePrice');
-        if (priceEl) priceEl.textContent = tab.currentPrice.toFixed(2) + ' USDT';
-
-        if (isNewLoad) resetChartToLatest();
-        updateActiveTabUI();
-
-        // Warm the chart with a few older pages without blocking the first paint.
-        if (isNewLoad) void prefetchOlderHistory(tab, requestId, CANDLE_HISTORY_PREFETCH_PAGES);
-    } catch (e) {
-        console.error(`[Candle Service] History load failed for ${tab.symbol} ${tab.timeframe}`, e);
-    } finally {
-        if (requestId !== null && requestId === tab.historyRequestId) tab.historyLoading = false;
-        debugStats.initialLoadTime = (performance.now() - startTime) / 1000;
+        scheduleCandleCacheSave(tab);
         updateDebugPanel();
+
+        if (isNewLoad && appState.activeTabId === tab.id) {
+            resetChartToLatest();
+            // Cached history may already be present; still fetch older backend pages
+            // so the left edge can extend without waiting for a manual scroll.
+            void prefetchOlderHistory(tab, requestId, CANDLE_HISTORY_PREFETCH_PAGES);
+        }
+    } catch (e) {
+        console.error(`[Candle Service] History refresh failed for ${tab.symbol} ${requestedTimeframe}`, e);
     }
 }
 
@@ -361,6 +491,7 @@ async function loadOlderCandles(tab, options = {}) {
         if (added <= 0) { tab.hasMore = false; return; }
         tab.oldestTime = tab.rawCandles[0].time;
         tab.totalCandles = tab.rawCandles.length;
+        scheduleCandleCacheSave(tab);
         const data = chartDataFor(tab);
         if (candleSeries) candleSeries.setData(data);
         rebuildIndicators(data);
@@ -398,6 +529,7 @@ function applyServerCandle(tab, incoming) {
     else return; // Do not grow the in-memory chart with history older than the loaded window.
 
     tab.currentPrice = candle.close;
+    scheduleCandleCacheSave(tab);
     if (appState.activeTabId === tab.id && candleSeries) {
         const adjusted = { ...candle, time: candle.time + TIMEZONE_OFFSET_SECONDS };
         if (index === bars.length - 1 || wasLatest) {

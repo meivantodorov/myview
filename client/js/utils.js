@@ -1,49 +1,32 @@
 // client/js/utils.js
 
-async function calculateClientHash() {
-    try {
-        const res = await fetch(window.location.href);
-        const text = await res.text();
-        const normalized = text.replace(/\r\n/g, '\n');
-        const msgBuffer = new TextEncoder().encode(normalized);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) {
-        return "ERROR";
-    }
-}
+async function checkServiceHealth() {
+    const statusEl = document.getElementById('serviceStatus');
+    if (!statusEl) return;
+    statusEl.textContent = 'Проверка на Candle Service...';
+    statusEl.style.color = 'var(--yellow)';
+    statusEl.style.borderColor = 'var(--yellow)';
 
-async function checkIntegrity() {
-    const tagEl = document.getElementById('integrityTag');
-    if (!tagEl) return;
-    tagEl.textContent = "Проверка на Candle Service...";
-    tagEl.style.color = 'var(--yellow)';
-    tagEl.style.borderColor = 'var(--yellow)';
-
-    CLIENT_HASH = await calculateClientHash();
     try {
-        const res = await fetch(`${PYTHON_SERVICE_URL}/health/ready`);
-        if (!res.ok) throw new Error(`Health HTTP ${res.status}`);
-        const data = await res.json();
-        BACKEND_HASH = data.status || 'UNKNOWN';
-        if (data.status !== 'ready' || !data.database) throw new Error('Service is not ready');
+        const response = await fetch(`${PYTHON_SERVICE_URL}/health/ready`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (data.status !== 'ready' || !data.database) throw new Error('Service/database not ready');
         const workers = Array.isArray(data.active_workers) ? data.active_workers.length : 0;
-        tagEl.textContent = `✓ Candle Service Ready\n${workers} active workers`;
-        tagEl.style.color = 'var(--green)';
-        tagEl.style.borderColor = 'var(--green)';
-    } catch (e) {
-        BACKEND_HASH = 'OFFLINE';
-        tagEl.textContent = `✕ Candle Service Offline\n${e.message}`;
-        tagEl.style.color = 'var(--red)';
-        tagEl.style.borderColor = 'var(--red)';
-        console.error('[Candle Service] Health check failed', e);
+        statusEl.textContent = `✓ Candle Service · ${workers} workers`;
+        statusEl.style.color = 'var(--green)';
+        statusEl.style.borderColor = 'var(--green)';
+    } catch (error) {
+        statusEl.textContent = '✕ Candle Service Offline';
+        statusEl.style.color = 'var(--red)';
+        statusEl.style.borderColor = 'var(--red)';
+        console.warn('[Candle Service] Health check failed:', error.message);
     }
 }
 
 function copyDebugLog() {
     const logData = {
-        integrity: { client: CLIENT_HASH, backend: BACKEND_HASH, version: VERSION, serviceUrl: PYTHON_SERVICE_URL, websocket: wsConn ? wsConn.readyState : 'not-created' },
+        service: { version: VERSION, url: PYTHON_SERVICE_URL, websocketState: wsConn ? wsConn.readyState : 'not-created' },
         indicators: Object.keys(activeIndicators),
         volumeConfig: window.Indicators.Volume ? window.Indicators.Volume.config : null,
         appState: { capital: appState.capital, posPct: appState.posPct, maxPos: appState.maxPos, activeTabId: appState.activeTabId, realizedPnl: appState.realizedPnl },

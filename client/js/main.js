@@ -16,5 +16,5 @@ window.addEventListener('DOMContentLoaded', () => {
     initDragAndDrop();
     createTab('BTCUSDT');
     initWebSocket();
-    checkIntegrity();
+    checkServiceHealth();
 });
