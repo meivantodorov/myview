@@ -1,0 +1,499 @@
+﻿
+========== RUNNING CONTAINERS ==========
+NAMES                              IMAGE                             PORTS                                     STATUS                       LABELS
+binance_frontend                   3myview-frontend                  0.0.0.0:3000->80/tcp, [::]:3000->80/tcp   Up 4 minutes                 com.docker.compose.config-hash=03fb61406d7be9a9e34c13a0aad280296695c4a78921a12e41e5b250b82bb306,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:5617d7c7c3f52630675f1d1a246c0dd0d0cd5ff6eb97d8f5c63b567024f88d80,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview,com.docker.compose.project=3myview,com.docker.compose.replace=binance_frontend,com.docker.compose.service=frontend,com.docker.compose.version=2.39.2,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/80/tcp=:3000,maintainer=NGINX Docker Maintainers <docker-maint@nginx.com>
+binance-candle-service             binance-trading-stack-api                                                   Exited (137) 6 minutes ago   com.docker.compose.config-hash=92077d27b2e51d364554bedafdb862a2b88417f8c58e804113f66ae0240ea0ac,com.docker.compose.container-number=1,com.docker.compose.depends_on=db:service_healthy:false,com.docker.compose.image=sha256:631d83924c2f5aeed2988bf52de98c8c4efdbf365a74e323609adc55580d5e11,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview,com.docker.compose.project=binance-trading-stack,com.docker.compose.replace=binance-candle-service,com.docker.compose.service=api,com.docker.compose.version=2.39.2,desktop.docker.io/binds/0/Source=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\backend\logs,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/app/logs,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/8000/tcp=:8000
+candle-db                          postgres:16-alpine                                                          Exited (0) 6 minutes ago     com.docker.compose.config-hash=3d8118a4637ace78be0224c82028c17ec68e442702943fa89f76f9b9259a01f9,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:4278d7b1e3deb3193ddc803158f6532963f059fc25a2eefaee4b5a9e71741873,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview,com.docker.compose.project=binance-trading-stack,com.docker.compose.service=db,com.docker.compose.version=2.39.2,desktop.docker.io/ports.scheme=v2
+bina_app                           binance_fetcher-bina_app                                                    Created                      com.docker.compose.config-hash=179485905f3a533b4c64b22df053dea29f1c5e37b83b304f47a364a79aa42e7d,com.docker.compose.container-number=1,com.docker.compose.depends_on=bina_pgbouncer:service_healthy:false,com.docker.compose.image=sha256:0f5bb18d6e2c4428cc3ee996207ad6c27ea9705055a4caf35d8997c46d217c91,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\binance_fetcher,com.docker.compose.project=binance_fetcher,com.docker.compose.service=bina_app,com.docker.compose.version=2.39.2,desktop.docker.io/ports.scheme=v2
+bina_pgbouncer                     edoburu/pgbouncer:latest          5432/tcp, 0.0.0.0:6432->6432/tcp          Exited (255) 22 hours ago    com.docker.compose.config-hash=cc357630e49287fa64281c8d53eccfbe37d97d9635144597803a6e6c44474d03,com.docker.compose.container-number=1,com.docker.compose.depends_on=bina_pg:service_healthy:false,com.docker.compose.image=sha256:5b28fd5ba5b5455bded482d859bc40fec7e7e5318a75a48a51f60bac65728588,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\binance_fetcher,com.docker.compose.project=binance_fetcher,com.docker.compose.service=bina_pgbouncer,com.docker.compose.version=2.39.2,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/6432/tcp=:6432
+bina_pg                            postgres:16-alpine                0.0.0.0:5432->5432/tcp                    Exited (255) 22 hours ago    com.docker.compose.config-hash=0c8d3b36aa63684492c43396ae12d2d6780a5db7c9135c38c4ef4073a4bb028c,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:4278d7b1e3deb3193ddc803158f6532963f059fc25a2eefaee4b5a9e71741873,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\binance_fetcher,com.docker.compose.project=binance_fetcher,com.docker.compose.service=bina_pg,com.docker.compose.version=2.39.2,desktop.docker.io/binds/1/Source=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker\postgres\init,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/binds/1/Target=/docker-entrypoint-initdb.d,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/5432/tcp=:5432
+binance-aggregator-test-tester-1   binance-aggregator-test-tester                                              Exited (0) 43 hours ago      com.docker.compose.config-hash=a7d28a66f00da1bdbe1e57525a0b9f08df22f6afe47f6505f3a8e5571ebbccec,com.docker.compose.container-number=1,com.docker.compose.depends_on=postgres-test:service_healthy:false,com.docker.compose.image=sha256:5f4cbe19adf0bef511d3f2725a0d3590496dbac48d090415dceec4f2e199fe08,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.test.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\binance_fetcher,com.docker.compose.project=binance-aggregator-test,com.docker.compose.replace=tester-1,com.docker.compose.service=tester,com.docker.compose.version=2.39.2,desktop.docker.io/binds/0/Source=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\tests,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/app/tests,desktop.docker.io/ports.scheme=v2
+agg-postgres-test                  postgres:16-alpine                                                          Exited (0) 43 hours ago      com.docker.compose.config-hash=b23c056cb927744a0225db7084601b67aebdf3095717559431b7a4e807676ac9,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:4278d7b1e3deb3193ddc803158f6532963f059fc25a2eefaee4b5a9e71741873,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.test.yml,com.docker.compose.project.working_dir=C:\Users\meiva\Documents\1_Ivan\binance_fetcher,com.docker.compose.project=binance-aggregator-test,com.docker.compose.service=postgres-test,com.docker.compose.version=2.39.2,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/5432/tcp=:55432
+anythingllm                        mintplexlabs/anythingllm:latest                                             Exited (137) 6 months ago    desktop.docker.io/binds/0/Source=C:\Users\meiva\Documents\anythingllm-docker,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/app/server/storage,desktop.docker.io/binds/1/Source=C:\Users\meiva\Documents\anythingllm-docker\.env,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/binds/1/Target=/app/server/.env,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/3001/tcp=:3001,org.opencontainers.image.created=2026-04-23T00:53:46.732Z,org.opencontainers.image.description=The all-in-one AI productivity accelerator. On device and privacy first with no annoying setup or configuration.,org.opencontainers.image.licenses=MIT,org.opencontainers.image.ref.name=ubuntu,org.opencontainers.image.revision=680d38a3ce914537738b0b406e056045da2af7b6,org.opencontainers.image.source=https://github.com/Mintplex-Labs/anything-llm,org.opencontainers.image.title=anything-llm,org.opencontainers.image.url=https://github.com/Mintplex-Labs/anything-llm,org.opencontainers.image.version=master
+searxng                            searxng/searxng:latest                                                      Exited (0) 6 months ago      com.docker.compose.config-hash=b8afeaee8cbc04b20c97b2aebc6b1e3aa8e963a99db256d1c19c548262b2d4e9,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:3023deab2d66d6a5f31f4bc43b39bc42b047377569f1fc3c50173248dcf5edf0,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\docker\searxng\docker-compose.yml,com.docker.compose.project.working_dir=C:\docker\searxng,com.docker.compose.project=searxng,com.docker.compose.service=searxng,com.docker.compose.version=2.39.2,desktop.docker.io/binds/0/Source=C:\docker\searxng\settings.yml,desktop.docker.io/binds/0/SourceKind=hostFile,desktop.docker.io/binds/0/Target=/etc/searxng/settings.yml,desktop.docker.io/binds/1/Source=C:\docker\searxng\data,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/binds/1/Target=/var/cache/searxng,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/8080/tcp=:8080,org.opencontainers.image.created=2026-04-22T08:01:36Z,org.opencontainers.image.description=SearXNG is a metasearch engine. Users are neither tracked nor profiled.,org.opencontainers.image.documentation=https://docs.searxng.org/admin/installation-docker,org.opencontainers.image.licenses=AGPL-3.0-or-later,org.opencontainers.image.revision=74f1ca203f625961b3827e21c811a5543f8942ac,org.opencontainers.image.source=https://github.com/searxng/searxng,org.opencontainers.image.title=SearXNG,org.opencontainers.image.url=https://searxng.org,org.opencontainers.image.version=2026.4.22-74f1ca203
+awesome_curie                      chromium-chromium:latest          3000-3001/tcp                             Exited (255) 8 months ago    build_version=Linuxserver.io version:- 0bce4c55-ls21 Build-date:- 2026-02-25T10:10:09+00:00,com.docker.compose.project=chromium,com.docker.compose.service=chromium,com.docker.compose.version=2.39.2,desktop.docker.io/ports.scheme=v2,maintainer=thelamer,org.opencontainers.image.authors=linuxserver.io,org.opencontainers.image.created=2026-02-25T10:10:09+00:00,org.opencontainers.image.description=[Chromium](https://www.chromium.org/chromium-projects/) is an open-source browser project that aims to build a safer, faster, and more stable way for all users to experience the web.,org.opencontainers.image.documentation=https://docs.linuxserver.io/images/docker-chromium,org.opencontainers.image.licenses=GPL-3.0-only,org.opencontainers.image.ref.name=b1cd8640cbd923efe57d83b09d5cff17fd17ef92,org.opencontainers.image.revision=b1cd8640cbd923efe57d83b09d5cff17fd17ef92,org.opencontainers.image.source=https://github.com/linuxserver/docker-chromium,org.opencontainers.image.title=Chromium,org.opencontainers.image.url=https://github.com/linuxserver/docker-chromium/packages,org.opencontainers.image.vendor=linuxserver.io,org.opencontainers.image.version=0bce4c55-ls21
+chromium-gui-cdp                   chromium-chromium                                                           Exited (0) 6 months ago      build_version=Linuxserver.io version:- 0bce4c55-ls21 Build-date:- 2026-02-25T10:10:09+00:00,com.docker.compose.config-hash=4bfc2917b3b7eae244625167f7e83d0c1ba0fbc85648295dd2a7916ff02b99cd,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.image=sha256:89febeacf967b1480f7cf39aeec236ffb7ba44772815007c2a45d09b7b542534,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=C:\docker\chromium\docker-compose.yml,com.docker.compose.project.working_dir=C:\docker\chromium,com.docker.compose.project=chromium,com.docker.compose.service=chromium,com.docker.compose.version=2.39.2,desktop.docker.io/binds/1/Source=C:\docker\chromium\ext,desktop.docker.io/binds/1/SourceKind=hostFile,desktop.docker.io/binds/1/Target=/config/ext,desktop.docker.io/ports.scheme=v2,desktop.docker.io/ports/3000/tcp=127.0.0.1:6080,desktop.docker.io/ports/9222/tcp=127.0.0.1:9222,desktop.docker.io/ports/9223/tcp=127.0.0.1:9223,maintainer=thelamer,org.opencontainers.image.authors=linuxserver.io,org.opencontainers.image.created=2026-02-25T10:10:09+00:00,org.opencontainers.image.description=[Chromium](https://www.chromium.org/chromium-projects/) is an open-source browser project that aims to build a safer, faster, and more stable way for all users to experience the web.,org.opencontainers.image.documentation=https://docs.linuxserver.io/images/docker-chromium,org.opencontainers.image.licenses=GPL-3.0-only,org.opencontainers.image.ref.name=b1cd8640cbd923efe57d83b09d5cff17fd17ef92,org.opencontainers.image.revision=b1cd8640cbd923efe57d83b09d5cff17fd17ef92,org.opencontainers.image.source=https://github.com/linuxserver/docker-chromium,org.opencontainers.image.title=Chromium,org.opencontainers.image.url=https://github.com/linuxserver/docker-chromium/packages,org.opencontainers.image.vendor=linuxserver.io,org.opencontainers.image.version=0bce4c55-ls21
+
+
+========== COMPOSE PROJECTS ==========
+NAME                      STATUS                  CONFIG FILES
+3myview                   running(1)              C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml
+binance-aggregator-test   exited(2)               C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.test.yml
+binance-trading-stack     exited(2)               C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml
+binance_fetcher           created(1), exited(2)   C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml
+chromium                  exited(1)               C:\docker\chromium\docker-compose.yml
+searxng                   exited(1)               C:\docker\searxng\docker-compose.yml
+
+
+========== NETWORKS ==========
+NETWORK ID     NAME                              DRIVER    SCOPE
+394fbec5993f   3myview_default                   bridge    local
+cabc02e06938   binance-aggregator-test_default   bridge    local
+a90ca9e0561a   binance-trading-stack_default     bridge    local
+d714ec6cf082   binance_fetcher_default           bridge    local
+90d39d4205a3   bridge                            bridge    local
+8651df15ba9c   chromium_default                  bridge    local
+24cd1fc0c378   fetcher_candle-net                bridge    local
+c102277705ae   host                              host      local
+964dda3bcf3e   none                              null      local
+558d0e6f3e9e   searxng_default                   bridge    local
+e3cdbdb2cde0   service_candle-net                bridge    local
+
+
+========== VOLUMES ==========
+DRIVER    VOLUME NAME
+local     0d8e13421053a4f63300471c9239592fbedab59f2d93e8c1b8fa83ed22ad279c
+local     97480ec4a7da762fca35086637c4d4366e654ce062b984c77441fbfd8ac0a9f5
+local     binance-candle-service_postgres_data
+local     binance_fetcher_pg_data
+local     c951936d4475fbf56c0920089c1ac74e4764e16207216487757e944e51753485
+local     chromium_chromium_config
+local     f8aa66a193e2371ca96a03511618c8481d25e252595c1ee939894588bd2d49f8
+local     fa17ea911ed8017acbf3fcb264094ac9aeb2153d59732f2b68c42d1837d41136
+local     fb2325757750c965e4f8446ec65c2f08ab76233e32d7933dd156ce4c7d7cc825
+local     fetcher_postgres_data
+local     open-webui
+local     service_postgres_data
+
+
+========== ALL docker-compose*.yml / compose*.yml FILES ==========
+
+----- FILE: backend\docker-compose.yml -----
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: candle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-candles}
+      POSTGRES_USER: ${POSTGRES_USER:-candles}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-candles} -d ${POSTGRES_DB:-candles}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [candle-net]
+
+  api:
+    build: .
+    container_name: binance-candle-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-candles}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-candles}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [candle-net]
+
+volumes:
+  postgres_data:
+networks:
+  candle-net:
+    driver: bridge
+
+
+----- FILE: docker-compose.yml -----
+services:
+#   backend:
+#     build: ./services/fetcher
+#     container_name: binance_backend
+#     ports:
+#       - "8080:8080"
+#     restart: unless-stopped
+#     environment:
+#       - PYTHONUNBUFFERED=1
+#     volumes:
+#       - ./services/fetcher/data:/app/data  # Ð¢Ð£Ðš Ð—ÐÐŸÐÐ—Ð’ÐÐœÐ• ÐšÐ•Ð¨Ð
+
+  frontend:
+    build: ./client
+    container_name: binance_frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    # depends_on:
+    #   - backend
+
+
+========== ALL Dockerfile* FILES ==========
+
+----- FILE: backend\Dockerfile -----
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY pyproject.toml ./
+COPY app ./app
+RUN pip install --no-cache-dir .
+COPY tests ./tests
+RUN mkdir -p /app/logs && useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+USER appuser
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+----- FILE: client\Dockerfile -----
+FROM nginx:alpine
+# ÐšÐ¾Ð¿Ð¸Ñ€Ð°Ð¼Ðµ Ð¦Ð¯Ð›ÐÐ¢Ð Ð¿Ð°Ð¿ÐºÐ° (Ð²ÐºÐ»ÑŽÑ‡Ð¸Ñ‚ÐµÐ»Ð½Ð¾ indicators), Ð° Ð½Ðµ ÑÐ°Ð¼Ð¾ index.html
+COPY . /usr/share/nginx/html/
+EXPOSE 80
+
+
+----- FILE: services\fetcher\Dockerfile -----
+# Ð˜Ð·Ð¿Ð¾Ð»Ð·Ð²Ð°Ð¼Ðµ Ð»ÐµÐºÐ° Ð²ÐµÑ€ÑÐ¸Ñ Ð½Ð° Python
+FROM python:3.11-slim
+
+# Ð—Ð°Ð´Ð°Ð²Ð°Ð¼Ðµ Ñ€Ð°Ð±Ð¾Ñ‚Ð½Ð° Ð´Ð¸Ñ€ÐµÐºÑ‚Ð¾Ñ€Ð¸Ñ Ð²ÑŠÑ‚Ñ€Ðµ Ð² ÐºÐ¾Ð½Ñ‚ÐµÐ¹Ð½ÐµÑ€Ð°
+WORKDIR /app
+
+# ÐšÐ¾Ð¿Ð¸Ñ€Ð°Ð¼Ðµ ÑÐ°Ð¼Ð¾ requirements Ð¿ÑŠÑ€Ð²Ð¾ (Ð·Ð° Ð¿Ð¾-Ð±ÑŠÑ€Ð·Ð¾ ÐºÐµÑˆÐ¸Ñ€Ð°Ð½Ðµ)
+COPY requirements.txt .
+
+# Ð˜Ð½ÑÑ‚Ð°Ð»Ð¸Ñ€Ð°Ð¼Ðµ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸Ñ‚Ðµ
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ÐšÐ¾Ð¿Ð¸Ñ€Ð°Ð¼Ðµ Ð¾ÑÑ‚Ð°Ð½Ð°Ð»Ð¸Ñ ÐºÐ¾Ð´
+COPY . .
+
+# ÐšÐ°Ð·Ð²Ð°Ð¼Ðµ Ð½Ð° Python Ð´Ð° Ð½Ðµ Ð±ÑƒÑ„ÐµÑ€Ð¸Ñ€Ð° Ð¸Ð·Ñ…Ð¾Ð´Ð°
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
+
+# Ð¡Ñ‚Ð°Ñ€Ñ‚Ð¸Ñ€Ð°Ð¼Ðµ ÑÑŠÑ€Ð²Ð¸Ð·Ð° (Ð±ÐµÐ· reload, Ð·Ð°Ñ‰Ð¾Ñ‚Ð¾ Docker ÑÐ°Ð¼ Ñ‰Ðµ ÑÐµ Ð³Ñ€Ð¸Ð¶Ð¸ Ð·Ð° Ñ€ÐµÑÑ‚Ð°Ñ€Ñ‚Ð¸Ñ‚Ðµ)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--http", "h11"]
+
+
+========== ALL .env / .env.* FILES (values masked) ==========
+
+----- FILE: backend\.env.example -----
+# Copy to .env. No Binance API key is required for public Spot market data.
+APP_ENV=production
+LOG_LEVEL=INFO
+LOG_JSON=true
+API_PORT=8000
+API_KEY=
+DATABASE_URL=postgresql://candles:change_me@db:5432/candles
+POSTGRES_DB=candles
+POSTGRES_USER=candles
+POSTGRES_PASSWORD=***MASKED***
+BINANCE_REST_URL=https://api.binance.com
+BINANCE_WS_URL=wss://stream.binance.com:9443/ws
+BINANCE_REQUEST_TIMEOUT=15
+BINANCE_MAX_CONCURRENT_REQUESTS=3
+BINANCE_BACKOFF_MAX_SECONDS=60
+WATERMARK_SECONDS=120
+RECONCILE_INTERVAL_SECONDS=300
+RECOVERY_INTERVAL_SECONDS=60
+HISTORY_BURST_DEFAULT=500
+BACKFILL_BATCH_SIZE=1000
+MAX_CANDLES_PER_REQUEST=5000
+ACTIVE_SYMBOL_LIMIT=5
+CLIENT_WS_HEARTBEAT_SECONDS=30
+
+----- FILE: .env -----
+# ÐŸÐ¾Ñ€Ñ‚Ð¾Ð²Ðµ Ð½Ð° Ñ…Ð¾ÑÑ‚Ð°
+FRONTEND_PORT=8080
+API_PORT=8000
+
+# PostgreSQL â€” Ð½Ðµ ÑÐ¼ÐµÐ½ÑÐ¹ Ñ‚ÐµÐ·Ð¸ ÑÑ‚Ð¾Ð¹Ð½Ð¾ÑÑ‚Ð¸ Ð¿Ñ€Ð¸ Ð¼Ð¸Ð³Ñ€Ð°Ñ†Ð¸Ñ Ð½Ð° ÑÑŠÑ‰ÐµÑÑ‚Ð²ÑƒÐ²Ð°Ñ‰Ð°Ñ‚Ð° Ð±Ð°Ð·Ð°
+POSTGRES_DB=candles
+POSTGRES_USER=candles
+POSTGRES_PASSWORD=***MASKED***
+POSTGRES_VOLUME_NAME=service_postgres_data
+
+# ÐžÑÑ‚Ð°Ð²Ð¸ Ð¿Ñ€Ð°Ð·Ð½Ð¾ Ð·Ð° Ð»Ð¾ÐºÐ°Ð»Ð½Ð° ÑƒÐ¿Ð¾Ñ‚Ñ€ÐµÐ±Ð°; Ð·Ð° API Ð·Ð°Ñ‰Ð¸Ñ‚Ð° Ð·Ð°Ð´Ð°Ð¹ Ð´ÑŠÐ»ÑŠÐ³ ÑÐ»ÑƒÑ‡Ð°ÐµÐ½ ÐºÐ»ÑŽÑ‡
+API_KEY=
+APP_ENV=production
+LOG_LEVEL=INFO
+LOG_JSON=true
+
+BINANCE_REST_URL=https://api.binance.com
+BINANCE_WS_URL=wss://stream.binance.com:9443/ws
+BINANCE_REQUEST_TIMEOUT=15
+BINANCE_MAX_CONCURRENT_REQUESTS=3
+BINANCE_BACKOFF_MAX_SECONDS=60
+WATERMARK_SECONDS=120
+RECONCILE_INTERVAL_SECONDS=300
+RECOVERY_INTERVAL_SECONDS=60
+HISTORY_BURST_DEFAULT=500
+BACKFILL_BATCH_SIZE=1000
+MAX_CANDLES_PER_REQUEST=5000
+ACTIVE_SYMBOL_LIMIT=5
+CLIENT_WS_HEARTBEAT_SECONDS=30
+
+----- FILE: .env.example -----
+# ÐŸÐ¾Ñ€Ñ‚Ð¾Ð²Ðµ Ð½Ð° Ñ…Ð¾ÑÑ‚Ð°
+FRONTEND_PORT=8080
+API_PORT=8000
+
+# PostgreSQL â€” Ð½Ðµ ÑÐ¼ÐµÐ½ÑÐ¹ Ñ‚ÐµÐ·Ð¸ ÑÑ‚Ð¾Ð¹Ð½Ð¾ÑÑ‚Ð¸ Ð¿Ñ€Ð¸ Ð¼Ð¸Ð³Ñ€Ð°Ñ†Ð¸Ñ Ð½Ð° ÑÑŠÑ‰ÐµÑÑ‚Ð²ÑƒÐ²Ð°Ñ‰Ð°Ñ‚Ð° Ð±Ð°Ð·Ð°
+POSTGRES_DB=candles
+POSTGRES_USER=candles
+POSTGRES_PASSWORD=***MASKED***
+POSTGRES_VOLUME_NAME=service_postgres_data
+
+# ÐžÑÑ‚Ð°Ð²Ð¸ Ð¿Ñ€Ð°Ð·Ð½Ð¾ Ð·Ð° Ð»Ð¾ÐºÐ°Ð»Ð½Ð° ÑƒÐ¿Ð¾Ñ‚Ñ€ÐµÐ±Ð°; Ð·Ð° API Ð·Ð°Ñ‰Ð¸Ñ‚Ð° Ð·Ð°Ð´Ð°Ð¹ Ð´ÑŠÐ»ÑŠÐ³ ÑÐ»ÑƒÑ‡Ð°ÐµÐ½ ÐºÐ»ÑŽÑ‡
+API_KEY=
+APP_ENV=production
+LOG_LEVEL=INFO
+LOG_JSON=true
+
+BINANCE_REST_URL=https://api.binance.com
+BINANCE_WS_URL=wss://stream.binance.com:9443/ws
+BINANCE_REQUEST_TIMEOUT=15
+BINANCE_MAX_CONCURRENT_REQUESTS=3
+BINANCE_BACKOFF_MAX_SECONDS=60
+WATERMARK_SECONDS=120
+RECONCILE_INTERVAL_SECONDS=300
+RECOVERY_INTERVAL_SECONDS=60
+HISTORY_BURST_DEFAULT=500
+BACKFILL_BATCH_SIZE=1000
+MAX_CANDLES_PER_REQUEST=5000
+ACTIVE_SYMBOL_LIMIT=5
+CLIENT_WS_HEARTBEAT_SECONDS=30
+
+========== ALL *.bat / *.ps1 / *.sh START/STOP SCRIPTS ==========
+
+----- FILE: backend\scripts\backup.bat -----
+@echo off
+cd /d "%~dp0.."
+if not exist backups mkdir backups
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set STAMP=%%i
+docker compose exec -T db sh -c "pg_dump -U \"$POSTGRES_USER\" \"$POSTGRES_DB\"" > "backups\\candles-%STAMP%.sql"
+if errorlevel 1 echo Backup failed. Check database container health and permissions.
+
+
+----- FILE: backend\scripts\doctor.bat -----
+@echo off
+cd /d "%~dp0.."
+echo === Docker version ===
+docker --version
+echo === Compose version ===
+docker compose version
+echo === Containers ===
+docker compose ps
+echo === API readiness ===
+powershell -NoProfile -Command "try { Invoke-RestMethod http://localhost:8000/health/ready | ConvertTo-Json -Depth 5 } catch { Write-Host $_; exit 1 }"
+echo === Recent API logs ===
+docker compose logs --tail=80 api
+
+
+----- FILE: backend\scripts\logs.bat -----
+@echo off
+cd /d "%~dp0.."
+docker compose logs -f --tail=200 %*
+
+
+----- FILE: backend\scripts\start.bat -----
+@echo off
+setlocal
+cd /d "%~dp0.."
+if not exist .env (
+  copy .env.example .env >nul
+  echo Created .env from .env.example. Review POSTGRES_PASSWORD before exposing this service.
+)
+docker compose up --build -d
+if errorlevel 1 (
+  echo Docker Compose failed. Check Docker Desktop and run scripts\doctor.bat
+  exit /b 1
+)
+echo Service starting. API: http://localhost:8000  Docs: http://localhost:8000/docs
+echo Logs: docker compose logs -f api
+
+
+----- FILE: backend\scripts\start.ps1 -----
+$ErrorActionPreference = "Stop"
+Set-Location (Join-Path $PSScriptRoot "..")
+if (!(Test-Path ".env")) { Copy-Item ".env.example" ".env"; Write-Host "Created .env; review its credentials." }
+docker compose up --build -d
+if ($LASTEXITCODE -ne 0) { throw "Docker Compose failed. Check Docker Desktop." }
+Write-Host "API: http://localhost:8000 | Swagger: http://localhost:8000/docs"
+
+
+----- FILE: backend\scripts\stop.bat -----
+@echo off
+cd /d "%~dp0.."
+docker compose down
+
+
+----- FILE: backend\scripts\test.bat -----
+@echo off
+setlocal
+cd /d "%~dp0.."
+echo Running unit tests in a temporary container...
+docker compose run --rm --no-deps --entrypoint sh api -c "pip install --no-cache-dir pytest pytest-asyncio && pytest -q"
+if errorlevel 1 (
+  echo Tests failed. Review the output above.
+  exit /b 1
+)
+echo All tests passed.
+
+
+----- FILE: scripts\backup.bat -----
+@echo off
+setlocal
+cd /d "%~dp0.."
+if not exist backups mkdir backups
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set STAMP=%%i
+docker compose exec -T db sh -c "pg_dump -U \"$POSTGRES_USER\" \"$POSTGRES_DB\"" > "backups\candles-%STAMP%.sql"
+if errorlevel 1 (echo Backup failed.& exit /b 1)
+echo Backup saved: backups\candles-%STAMP%.sql
+
+
+----- FILE: scripts\down.bat -----
+@echo off
+cd /d "%~dp0.."
+echo This removes containers and network only. The database volume is retained.
+docker compose down
+
+
+----- FILE: scripts\logs.bat -----
+@echo off
+cd /d "%~dp0.."
+if "%~1"=="" (docker compose logs -f --tail=200) else (docker compose logs -f --tail=200 %*)
+
+
+----- FILE: scripts\restart.bat -----
+@echo off
+cd /d "%~dp0.."
+docker compose restart
+
+
+----- FILE: scripts\start.bat -----
+@echo off
+chcp 65001 >nul
+title Start Binance Terminal
+cd /d "%~dp0"
+
+REM Backend (api + db)
+docker compose -f backend\docker-compose.yml up -d --build
+
+REM Frontend (client)
+docker-compose up -d --build
+
+echo.
+echo âœ… Ð¡Ñ‚Ð°Ñ€Ñ‚Ð¸Ñ€Ð°Ð½Ð¾!
+echo ðŸ‘‰ Frontend: http://localhost:3000
+echo ðŸ‘‰ Backend:  http://localhost:8000/
+pause
+
+
+----- FILE: scripts\status.bat -----
+@echo off
+cd /d "%~dp0.."
+docker compose ps
+echo.
+powershell -NoProfile -Command "try { Invoke-RestMethod http://127.0.0.1:8000/diagnostics | ConvertTo-Json -Depth 6 } catch { Write-Host 'API diagnostics not available yet.' -ForegroundColor Yellow }"
+
+
+----- FILE: scripts\stop.bat -----
+@echo off
+cd /d "%~dp0.."
+REM Stop containers but preserve PostgreSQL volume and all data.
+docker stop binance_frontend binance-candle-service candle-db
+
+
+----- FILE: debug_service.bat -----
+docker-compose logs -f
+
+========== CONTAINER → COMPOSE MAPPING ==========
+
+Container: binance_frontend
+  Project:      3myview
+  Service:      frontend
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview
+
+Container: binance-candle-service
+  Project:      binance-trading-stack
+  Service:      api
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview
+
+Container: candle-db
+  Project:      binance-trading-stack
+  Service:      db
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview\docker-compose.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\#! trading tools\#3 myview
+
+Container: bina_app
+  Project:      binance_fetcher
+  Service:      bina_app
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\binance_fetcher
+
+Container: bina_pgbouncer
+  Project:      binance_fetcher
+  Service:      bina_pgbouncer
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\binance_fetcher
+
+Container: bina_pg
+  Project:      binance_fetcher
+  Service:      bina_pg
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\binance_fetcher
+
+Container: binance-aggregator-test-tester-1
+  Project:      binance-aggregator-test
+  Service:      tester
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.test.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\binance_fetcher
+
+Container: agg-postgres-test
+  Project:      binance-aggregator-test
+  Service:      postgres-test
+  ConfigFiles:  C:\Users\meiva\Documents\1_Ivan\binance_fetcher\docker-compose.test.yml
+  WorkingDir:   C:\Users\meiva\Documents\1_Ivan\binance_fetcher
+
+Container: anythingllm
+  Project:      
+  Service:      
+  ConfigFiles:  
+  WorkingDir:   
+
+Container: searxng
+  Project:      searxng
+  Service:      searxng
+  ConfigFiles:  C:\docker\searxng\docker-compose.yml
+  WorkingDir:   C:\docker\searxng
+
+Container: awesome_curie
+  Project:      chromium
+  Service:      chromium
+  ConfigFiles:  
+  WorkingDir:   
+
+Container: chromium-gui-cdp
+  Project:      chromium
+  Service:      chromium
+  ConfigFiles:  C:\docker\chromium\docker-compose.yml
+  WorkingDir:   C:\docker\chromium
+
+========== PORT MAPS (host → container) ==========
+binance_frontend: 0.0.0.0:3000->80/tcp, [::]:3000->80/tcp
+binance-candle-service: 
+candle-db: 
+bina_app: 
+bina_pgbouncer: 5432/tcp, 0.0.0.0:6432->6432/tcp
+bina_pg: 0.0.0.0:5432->5432/tcp
+binance-aggregator-test-tester-1: 
+agg-postgres-test: 
+anythingllm: 
+searxng: 
+awesome_curie: 3000-3001/tcp
+chromium-gui-cdp: 
+
