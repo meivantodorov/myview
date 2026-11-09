@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -162,7 +162,7 @@
     <!-- Top Bar -->
     <div id="topbar">
         <div class="brand">
-            <span style="cursor: pointer;" onclick="toggleMenu()">☰</span> Binance Micro-Terminal
+            <span style="cursor: pointer;" onclick="toggleMenu()">â˜°</span> Binance Micro-Terminal
         </div>
         <div class="stats">
             <div class="stat">
@@ -177,7 +177,7 @@
                 <div id="serviceStatus">Candle Service</div>
             </div>
             <div style="display: flex; align-items: center; margin-left: 10px;">
-                <button class="ind-btn" onclick="copyDebugLog()">📋 Debug Log</button>
+                <button class="ind-btn" onclick="copyDebugLog()">ðŸ“‹ Debug Log</button>
             </div>
         </div>
     </div>
@@ -191,8 +191,8 @@
         <div id="chartWrapper">
             <div id="chartHeader">
                 <div class="header-top">
-                    <div id="chartSymbolLabel">—</div>
-                    <div id="chartLivePrice">—</div>
+                    <div id="chartSymbolLabel">â€”</div>
+                    <div id="chartLivePrice">â€”</div>
                 </div>
                 <div id="controls">
                     <button class="tf-btn active" data-tf="1m" onclick="setTimeframe('1m')">1m</button>
@@ -203,7 +203,7 @@
                     <button class="tf-btn" data-tf="4h" onclick="setTimeframe('4h')">4h</button>
                     <button class="tf-btn" data-tf="1d" onclick="setTimeframe('1d')">1d</button>
                     <button class="tf-btn" data-tf="1w" onclick="setTimeframe('1w')">1w</button>
-                    <button class="tf-btn" onclick="resetChartToLatest()" title="Reset to Latest" style="color: var(--yellow); border-color: var(--yellow);">⟲</button>
+                    <button class="tf-btn" onclick="resetChartToLatest()" title="Reset to Latest" style="color: var(--yellow); border-color: var(--yellow);">âŸ²</button>
                 </div>
             </div>
 
@@ -221,7 +221,7 @@
                 <button class="ind-btn" id="btnToggleMA" onclick="toggleIndicator('MA')">MA</button>
                 <div class="ind-menu">
                     <button class="ind-btn" id="btnToggleVolume" onclick="toggleIndicator('Volume')">Vol</button>
-                    <button class="ind-btn" onclick="toggleVolumeSettings(event)" style="padding: 4px;">⚙️</button>
+                    <button class="ind-btn" onclick="toggleVolumeSettings(event)" style="padding: 4px;">âš™ï¸</button>
                     <div class="ind-dropdown" id="volumeSettingsMenu">
                         <label><input type="checkbox" id="volShowMA" onchange="saveVolumeSettings()"> Show MA</label>
                         <label>MA Period</label>
@@ -246,14 +246,14 @@
                 <div id="distances">
                     <div class="dist-box">
                         <span class="dist-lbl">TP Dist</span>
-                        <span class="dist-val" id="dispTPDist" style="color:var(--green)">—</span>
+                        <span class="dist-val" id="dispTPDist" style="color:var(--green)">â€”</span>
                     </div>
                     <div class="dist-box">
                         <span class="dist-lbl">SL Dist</span>
-                        <span class="dist-val" id="dispSLDist" style="color:var(--red)">—</span>
+                        <span class="dist-val" id="dispSLDist" style="color:var(--red)">â€”</span>
                     </div>
                 </div>
-                <div id="dispRR">R = —</div>
+                <div id="dispRR">R = â€”</div>
             </div>
 
             <div id="historyPanel">
@@ -265,10 +265,10 @@
 
     <!-- Debug Panel -->
     <div id="debugPanel">
-        <span>Load: <span id="dbgLoadTime">0.00s</span></span>
-        <span>Graph: <span id="dbgFixTime">0.00s</span></span>
-        <span>Batches: <span id="dbgBatches">0 / 0</span></span>
-        <span>Candles: <span id="dbgCandles">0 / 0</span></span>
+        <span id="dbgFetching">FETCHING: —</span>
+        <span>| Persisted: <span id="dbgPersisted">0 (—)</span></span>
+        <span>| Loaded: <span id="dbgCandles">0 / 0</span></span>
+        <span>| Load: <span id="dbgLoadTime">0.00s</span></span>
     </div>
 
     <!-- Scripts -->

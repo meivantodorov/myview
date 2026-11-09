@@ -103,3 +103,46 @@ function createLine(type, price, isCustom = false) {
         title: isCustom ? price.toFixed(2) : type.toUpperCase(),
     });
 }
+// ---------------------------------------------------------------------------
+// Scroll-based pagination: when the user scrolls near the left edge, fetch
+// older candles from the backend. Added automatically to fix missing pages.
+// ---------------------------------------------------------------------------
+(function () {
+    if (typeof maybeLoadOlderHistory === 'function') return;
+
+    let scrollLoadInFlight = false;
+
+    window.maybeLoadOlderHistory = function maybeLoadOlderHistory() {
+        if (scrollLoadInFlight) return;
+        const tab = typeof getActiveTab === 'function' ? getActiveTab() : null;
+        if (!tab || !tab.rawCandles || !tab.rawCandles.length) return;
+        if (tab.hasMore === false || tab.loadingOlder) return;
+        if (typeof chartObj === 'undefined' || !chartObj) return;
+
+        const range = chartObj.timeScale().getVisibleLogicalRange();
+        if (!range) return;
+
+        // Trigger when fewer than 200 bars remain to the left of the viewport.
+        const leftEdge = range.from;
+        if (leftEdge > 200) return;
+
+        scrollLoadInFlight = true;
+        Promise.resolve(typeof loadOlderCandles === 'function' ? loadOlderCandles(tab, { prefetch: true }) : null)
+            .catch(err => console.warn('[Scroll] loadOlderCandles failed', err))
+            .finally(() => { scrollLoadInFlight = false; });
+    };
+
+    // Attach to chart if it already exists (initChart runs on DOMContentLoaded).
+    function attach() {
+        if (typeof chartObj === 'undefined' || !chartObj) { setTimeout(attach, 300); return; }
+        try {
+            chartObj.timeScale().subscribeVisibleLogicalRangeChange(() => {
+                if (typeof window.maybeLoadOlderHistory === 'function') window.maybeLoadOlderHistory();
+            });
+            console.info('[Scroll] Pagination handler attached to chart');
+        } catch (e) {
+            console.warn('[Scroll] Failed to attach pagination handler', e);
+        }
+    }
+    attach();
+})();

@@ -1,4 +1,4 @@
-// client/js/state.js
+﻿// client/js/state.js
 
 const VERSION = "v9.1"; // Binance Candle Service adapter + paged history
 const PYTHON_SERVICE_URL = "http://127.0.0.1:8000";
@@ -35,7 +35,7 @@ let labelTPEl = null;
 let labelSLEl = null;
 let addLineBtn = null;
 
-// НОВИ ПРОМЕНЛИВИ ЗА ДЕБЪГ ПАНЕЛА
+// ÐÐžÐ’Ð˜ ÐŸÐ ÐžÐœÐ•ÐÐ›Ð˜Ð’Ð˜ Ð—Ð Ð”Ð•Ð‘ÐªÐ“ ÐŸÐÐÐ•Ð›Ð
 let debugStats = {
     initialLoadTime: 0,
     lastGraphFixTime: 0,
@@ -44,3 +44,33 @@ let debugStats = {
     totalBackendCandles: 0,
     loadedCandles: 0
 };
+// ============================================================
+// TAB PERSISTENCE
+// ============================================================
+const TABS_STORAGE_KEY = 'myview.tabs';
+const ACTIVE_TAB_STORAGE_KEY = 'myview.activeTab';
+
+function saveTabsToStorage() {
+    try {
+        const tabsToSave = appState.tabs.map(t => ({
+            id: t.id,
+            symbol: t.symbol,
+            timeframe: t.timeframe,
+            currentPrice: t.currentPrice,
+            position: t.position ? { side: t.position.side, entry: t.position.entry, sl: t.position.sl, tp: t.position.tp, sizeUSD: t.position.sizeUSD } : null,
+            history: t.history || []
+        }));
+        localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify(tabsToSave));
+        localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, String(appState.activeTabId || ''));
+    } catch (e) { console.warn('[Tabs] Failed to save', e); }
+}
+
+function loadTabsFromStorage() {
+    try {
+        const raw = localStorage.getItem(TABS_STORAGE_KEY);
+        if (!raw) return null;
+        const tabs = JSON.parse(raw);
+        const activeId = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+        return { tabs, activeId: activeId ? Number(activeId) : null };
+    } catch (e) { console.warn('[Tabs] Failed to load', e); return null; }
+}

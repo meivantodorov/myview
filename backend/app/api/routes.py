@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+﻿from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.dependencies import require_api_key
 from app.config import settings
@@ -107,3 +107,21 @@ def serialize(row):
         "low":str(row["low"]),"close":str(row["close"]),"volume":str(row["volume"]),
         "quote_volume":str(row.get("quote_volume",0)),"trades":int(row.get("trades",0)),
         "is_closed":bool(row.get("is_closed",False))}
+
+@router.get("/symbols/{symbol}/stats")
+async def symbol_stats(symbol: str):
+    symbol = symbol.upper()
+    async with get_pool().acquire() as conn:
+        count = await conn.fetchval("SELECT COUNT(*) FROM candles WHERE symbol=$1 AND timeframe='1m'", symbol)
+        oldest = await conn.fetchval("SELECT MIN(open_time) FROM candles WHERE symbol=$1 AND timeframe='1m'", symbol)
+        newest = await conn.fetchval("SELECT MAX(open_time) FROM candles WHERE symbol=$1 AND timeframe='1m'", symbol)
+        pending = await conn.fetchval("SELECT COUNT(*) FROM aggregation_jobs WHERE symbol=$1 AND status='PENDING'", symbol)
+        fetching = pending > 0
+    return {
+        "symbol": symbol,
+        "count_1m": count or 0,
+        "oldest_1m": datetime.fromtimestamp(oldest / 1000, tz=timezone.utc).isoformat() if oldest else None,
+        "newest_1m": datetime.fromtimestamp(newest / 1000, tz=timezone.utc).isoformat() if newest else None,
+        "fetching": fetching,
+        "pending_jobs": pending or 0
+    }

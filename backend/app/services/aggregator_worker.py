@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import time
 
@@ -29,10 +29,24 @@ class AggregatorWorker:
                 pass
 
     async def run(self):
+        last_cleanup = 0
         while not self.stopping.is_set():
             try:
                 if not await self.process_batch():
                     await asyncio.sleep(1)
+                # Retention: изтрива DONE jobs по-стари от 7 дни (веднъж на час)
+                now = time.time()
+                if now - last_cleanup > 3600:
+                    last_cleanup = now
+                    try:
+                        async with get_pool().acquire() as conn:
+                            result = await conn.execute(
+                                "DELETE FROM aggregation_jobs WHERE status='DONE' AND processed_at < NOW() - INTERVAL '7 days'"
+                            )
+                            if result and result != "DELETE 0":
+                                log.info(f"Retention cleanup: {result}", extra={"component": "aggregation"})
+                    except Exception:
+                        log.exception("Retention cleanup failed", extra={"component": "aggregation"})
             except asyncio.CancelledError:
                 raise
             except Exception:

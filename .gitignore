@@ -7,3 +7,17 @@ services/fetcher/data/BTCUSDT.json
 services/fetcher/data/candles.sqlite3
 services/fetcher/data/*.json
 services/fetcher/data/*.sqlite3
+client/node_modules/
+
+# Backups (не трябват в Git)
+backups/
+
+# Env файлове (секрети)
+.env
+backend/.env
+!backend/.env.example
+!.env.example
+
+# Node modules (генерират се с npm install)
+client/node_modules/
+node_modules/

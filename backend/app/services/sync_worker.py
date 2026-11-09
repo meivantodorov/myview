@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 import logging
 import time
@@ -119,7 +119,7 @@ class SymbolWorker:
                 await upsert_many(page)
                 log.info("Historical page stored", extra={"symbol":self.symbol,"component":"backfill"})
                 if len(page) < settings.backfill_batch_size: await asyncio.sleep(3600)
-                else: await asyncio.sleep(1)
+                else: await asyncio.sleep(0.1)
             except asyncio.CancelledError: raise
             except Exception:
                 log.exception("Backfill failed", extra={"symbol":self.symbol,"component":"backfill"})
@@ -128,21 +128,57 @@ class SymbolWorker:
     async def recovery_loop(self):
         while not self.stopping.is_set():
             try:
+                # 1. Последните 1000 1m (както преди)
                 latest = await latest_open_time(self.symbol)
-                # Re-fetch a rolling recent window to reconcile late updates and short-lived disconnect gaps.
-                start = max(0, latest - 999 * 60_000) if latest is not None else None
-                rows = await self.binance.klines(self.symbol, limit=1000, start_time=start) if start is not None else []
-                if rows: await upsert_many(rows)
-                # Refresh current 1m candle after startup/reconnect; keep in RAM for current endpoint.
-                current = await self.binance.klines(self.symbol, limit=2)
-                if current: self.current = current[-1]
-                await update_sync(self.symbol, "RUNNING", last_open_time=rows[-1]["open_time"] if rows else latest)
+                if latest is not None:
+                    start = max(0, latest - 999 * 60_000)
+                    rows = await self.binance.klines(self.symbol, limit=1000, start_time=start)
+                    if rows: await upsert_many(rows)
+                    current = await self.binance.klines(self.symbol, limit=2)
+                    if current: self.current = current[-1]
+
+                # 2. Търси дупки в цялата история и ги попълва
+                gaps = await self._find_gaps()
+                for gap in gaps[:10]:
+                    await self._fill_gap(gap)
+
+                await update_sync(self.symbol, "RUNNING", last_open_time=latest)
             except asyncio.CancelledError: raise
             except Exception as exc:
                 log.exception("Recovery/reconciliation failed", extra={"symbol":self.symbol,"component":"recovery"})
                 await update_sync(self.symbol, "DEGRADED", str(exc)[:1000])
             await asyncio.sleep(settings.recovery_interval_seconds)
 
+    async def _find_gaps(self):
+        async with get_pool().acquire() as conn:
+            rows = await conn.fetch("""
+                WITH ordered AS (
+                    SELECT open_time,
+                           LAG(open_time) OVER (ORDER BY open_time) AS prev
+                    FROM candles
+                    WHERE symbol=$1 AND timeframe='1m'
+                )
+                SELECT prev, open_time,
+                       (open_time - prev) / 60000 - 1 AS missing_minutes
+                FROM ordered
+                WHERE open_time - prev > 60000
+                ORDER BY prev
+                LIMIT 100
+            """, self.symbol)
+        return [dict(r) for r in rows]
+
+    async def _fill_gap(self, gap):
+        start_ms = gap["prev"] + 60000
+        end_ms = gap["open_time"] - 60000
+        missing = gap["missing_minutes"]
+        if missing > 5000:
+            log.warning(f"Gap too large ({missing} min), skipping", extra={"symbol": self.symbol})
+            return
+        page = await self.binance.klines(self.symbol, limit=min(missing + 10, 1000),
+                                          start_time=start_ms, end_time=end_ms)
+        if page:
+            await upsert_many(page)
+            log.info(f"Filled gap of {missing} min", extra={"symbol": self.symbol})
 async def get_oldest(symbol: str):
     async with get_pool().acquire() as conn:
         return await conn.fetchval("SELECT MIN(open_time) FROM candles WHERE symbol=$1 AND timeframe='1m'", symbol)

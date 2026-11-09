@@ -1,4 +1,4 @@
-// client/js/tabs.js
+﻿// client/js/tabs.js
 
 function getActiveTab() {
     return appState.tabs.find(t => t.id === appState.activeTabId);
@@ -16,7 +16,7 @@ function saveTimeframeFor(symbol, timeframe) {
 }
 
 
-const CANDLE_HISTORY_PAGE_SIZE = 1500;
+const CANDLE_HISTORY_PAGE_SIZE = 5000;
 const CANDLE_HISTORY_PREFETCH_PAGES = 2;
 const CANDLE_CACHE_DB = 'binance-micro-terminal-cache';
 const CANDLE_CACHE_STORE = 'histories';
@@ -65,6 +65,19 @@ async function writeCandleCache(symbol, timeframe, sourceCandles) {
         try {
             const tx = db.transaction(CANDLE_CACHE_STORE, 'readwrite');
             tx.objectStore(CANDLE_CACHE_STORE).put({ key: `${symbol}|${timeframe}`, savedAt: Date.now(), candles });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = tx.onabort = () => resolve(false);
+        } catch (_) { resolve(false); }
+    });
+}
+
+async function clearCandleCache(symbol, timeframe) {
+    const db = await openCandleCache();
+    if (!db) return;
+    return new Promise(resolve => {
+        try {
+            const tx = db.transaction(CANDLE_CACHE_STORE, 'readwrite');
+            tx.objectStore(CANDLE_CACHE_STORE).delete(symbol + '|' + timeframe);
             tx.oncomplete = () => resolve(true);
             tx.onerror = tx.onabort = () => resolve(false);
         } catch (_) { resolve(false); }
@@ -159,7 +172,7 @@ function updateDebugPanel() {
 }
 
 function addTabPrompt() {
-    const sym = prompt("Въведи двойка (напр. ETHUSDT):");
+    const sym = prompt("Ð’ÑŠÐ²ÐµÐ´Ð¸ Ð´Ð²Ð¾Ð¹ÐºÐ° (Ð½Ð°Ð¿Ñ€. ETHUSDT):");
     if (sym && sym.trim() !== "") createTab(sym.trim().toUpperCase());
 }
 
@@ -170,6 +183,7 @@ function createTab(symbol) {
     }
     const newTab = { id: Date.now(), symbol, position: null, history: [], currentPrice: 0, customLines: [], timeframe: savedTimeframeFor(symbol), rawCandles: [], totalCandles: 0, hasMore: true, oldestTime: null, loadingOlder: false, liveMinuteTime: null, liveBaseVolume: 0, registered: false, registrationPromise: null };
     appState.tabs.push(newTab);
+    if (typeof saveTabsToStorage === 'function') saveTabsToStorage();
     renderTabs();
     switchTab(newTab.id);
 }
@@ -178,15 +192,17 @@ function closeTab(id, event) {
     if (event) event.stopPropagation();
     const tab = appState.tabs.find(t => t.id === id);
     if (!tab) return;
-    if (tab.position && !confirm("Имате отворена позиция. Сигурни ли сте?")) return;
-    if (tab.position) { appState.activeTabId = id; closePosition('Close Tab'); }
+    if (tab.position && !confirm("Ð˜Ð¼Ð°Ñ‚Ðµ Ð¾Ñ‚Ð²Ð¾Ñ€ÐµÐ½Ð° Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ñ. Ð¡Ð¸Ð³ÑƒÑ€Ð½Ð¸ Ð»Ð¸ ÑÑ‚Ðµ?")) return;
+    if (tab.position) { appState.activeTabId = id;
+    if (typeof saveTabsToStorage === 'function') saveTabsToStorage(); closePosition('Close Tab'); }
     appState.tabs = appState.tabs.filter(t => t.id !== id);
+    if (typeof saveTabsToStorage === 'function') saveTabsToStorage();
     if (appState.activeTabId === id) {
         if (appState.tabs.length > 0) switchTab(appState.tabs[appState.tabs.length - 1].id);
         else {
             appState.activeTabId = null;
             if (candleSeries) candleSeries.setData([]);
-            document.getElementById('chartSymbolLabel').textContent = '—';
+            document.getElementById('chartSymbolLabel').textContent = 'â€”';
         }
     }
     renderTabs();
@@ -197,13 +213,14 @@ async function switchTab(id) {
     if (isSwitchingTab) return;
     isSwitchingTab = true;
     appState.activeTabId = id;
+    if (typeof saveTabsToStorage === 'function') saveTabsToStorage();
     renderTabs();
 
     const tab = getActiveTab();
     if (!tab) { isSwitchingTab = false; return; }
 
     document.getElementById('chartSymbolLabel').textContent = tab.symbol;
-    document.getElementById('chartLivePrice').textContent = '—';
+    document.getElementById('chartLivePrice').textContent = 'â€”';
 
     document.querySelectorAll('.tf-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tf === tab.timeframe));
 
@@ -223,6 +240,7 @@ async function switchTab(id) {
     });
 
     await fetchHistoryAndRender(tab, true);
+    updateVisibilityPanel();
 
     setTimeout(() => {
         if (appState.activeTabId === tab.id && tab.position) {
@@ -248,7 +266,7 @@ function renderTabs() {
         const el = document.createElement('div');
         el.className = `tab ${t.id === appState.activeTabId ? 'active' : ''}`;
         el.onclick = () => switchTab(t.id);
-        el.innerHTML = `${t.symbol} ${t.position ? '🟢' : ''} <span class="close-btn" onclick="closeTab(${t.id}, event)">×</span>`;
+        el.innerHTML = `${t.symbol} ${t.position ? 'ðŸŸ¢' : ''} <span class="close-btn" onclick="closeTab(${t.id}, event)">Ã—</span>`;
         container.appendChild(el);
     });
 
@@ -259,18 +277,42 @@ function renderTabs() {
     container.appendChild(addBtn);
 }
 
-function setTimeframe(tf) {
+function saveTabsState() {
+    if (typeof saveTabsToStorage === 'function') saveTabsToStorage();
+}
+
+async function setTimeframe(tf) {
     const tab = getActiveTab();
     if (!tab) return;
-
     if (!['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'].includes(tf)) return;
     if (tab.timeframe === tf) return;
+
     tab.timeframe = tf;
     saveTimeframeFor(tab.symbol, tf);
+    tab.rawCandles = [];
+    tab.oldestTime = null;
+    tab.hasMore = true;
+    tab.totalCandles = 0;
     tab.historyRequestId = (tab.historyRequestId || 0) + 1;
     tab.loadingOlder = false;
+
     document.querySelectorAll('.tf-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tf === tf);
+    });
+
+    // Изчистваме кеша за новия timeframe
+    void clearCandleCache(tab.symbol, tf);
+
+    // Премахваме и създаваме нова серия
+    if (candleSeries) {
+        try { candleSeries.setData([]); } catch(_) {}
+        try { chartObj.removeSeries(candleSeries); } catch(_) {}
+        candleSeries = null;
+    }
+    candleSeries = chartObj.addCandlestickSeries({
+        upColor: COLORS.tp, downColor: COLORS.sl,
+        borderUpColor: COLORS.tp, borderDownColor: COLORS.sl,
+        wickUpColor: COLORS.tp, wickDownColor: COLORS.sl
     });
 
     if (typeof resetWebSocketSubscriptions === 'function') {
@@ -283,10 +325,12 @@ function setTimeframe(tf) {
         activeIndicators[indId].refs = ind.init(chartObj, candleSeries, activeIndicators[indId].config);
     });
 
-    fetchHistoryAndRender(tab, true);
+    // Зареждаме новите данни
+    await fetchHistoryAndRender(tab, true);
+    updateVisibilityPanel();
 }
 
-// Нова функция за ръчно центриране
+// ÐÐ¾Ð²Ð° Ñ„ÑƒÐ½ÐºÑ†Ð¸Ñ Ð·Ð° Ñ€ÑŠÑ‡Ð½Ð¾ Ñ†ÐµÐ½Ñ‚Ñ€Ð¸Ñ€Ð°Ð½Ðµ
 function resetChartToLatest() {
     const tab = getActiveTab();
     if (!tab || !tab.rawCandles || !tab.rawCandles.length) return;
@@ -321,12 +365,13 @@ function renderCachedCandles(tab, candles, isNewLoad) {
     const data = chartDataFor(tab);
     if (candleSeries && appState.activeTabId === tab.id) {
         candleSeries.setData(data);
+        try { chartObj.timeScale().fitContent(); } catch(_) {}
         rebuildIndicators(data);
     }
     debugStats.loadedCandles = tab.rawCandles.length;
     debugStats.totalBackendCandles = tab.rawCandles.length;
     debugStats.currentBatches = Math.max(1, Math.ceil(tab.rawCandles.length / CANDLE_HISTORY_PAGE_SIZE));
-    debugStats.totalBatches = '∞';
+    debugStats.totalBatches = 'âˆž';
     const last = data[data.length - 1];
     if (last) {
         tab.currentPrice = last.close;
@@ -413,6 +458,7 @@ async function refreshHistoryFromService(tab, requestId, requestedTimeframe, isN
         if (changed && appState.activeTabId === tab.id && candleSeries) {
             const data = chartDataFor(tab);
             candleSeries.setData(data);
+        try { chartObj.timeScale().fitContent(); } catch(_) {}
             rebuildIndicators(data);
         }
         const last = tab.rawCandles[tab.rawCandles.length - 1];
@@ -427,7 +473,7 @@ async function refreshHistoryFromService(tab, requestId, requestedTimeframe, isN
         debugStats.loadedCandles = tab.rawCandles.length;
         debugStats.totalBackendCandles = Number(payload.count) || tab.rawCandles.length;
         debugStats.currentBatches = Math.max(1, Math.ceil(tab.rawCandles.length / CANDLE_HISTORY_PAGE_SIZE));
-        debugStats.totalBatches = '∞';
+        debugStats.totalBatches = 'âˆž';
         scheduleCandleCacheSave(tab);
         updateDebugPanel();
 
@@ -494,6 +540,7 @@ async function loadOlderCandles(tab, options = {}) {
         scheduleCandleCacheSave(tab);
         const data = chartDataFor(tab);
         if (candleSeries) candleSeries.setData(data);
+        try { chartObj.timeScale().fitContent(); } catch(_) {}
         rebuildIndicators(data);
         if (oldRange) {
             chartObj.timeScale().setVisibleLogicalRange({ from: oldRange.from + added, to: oldRange.to + added });
@@ -501,7 +548,7 @@ async function loadOlderCandles(tab, options = {}) {
         debugStats.loadedCandles = tab.rawCandles.length;
         debugStats.totalBackendCandles = tab.rawCandles.length;
         debugStats.currentBatches = Math.ceil(tab.rawCandles.length / CANDLE_HISTORY_PAGE_SIZE);
-        debugStats.totalBatches = '∞';
+        debugStats.totalBatches = 'âˆž';
         debugStats.lastGraphFixTime = (performance.now() - started) / 1000;
         updateDebugPanel();
     } catch (e) {
@@ -541,6 +588,7 @@ function applyServerCandle(tab, incoming) {
         } else {
             const data = chartDataFor(tab);
             candleSeries.setData(data);
+        try { chartObj.timeScale().fitContent(); } catch(_) {}
             rebuildIndicators(data);
         }
         const priceEl = document.getElementById('chartLivePrice');
@@ -568,10 +616,10 @@ function updateActiveTabUI() {
         if (btnBuy) btnBuy.disabled = true;
         if (btnSell) btnSell.disabled = true;
         if (btnClose) btnClose.disabled = true;
-        if (positionInfo) positionInfo.innerHTML = '<div class="pos-row"><span class="lbl">Няма активен таб</span></div>';
-        if (dispRR) { dispRR.textContent = 'R = —'; dispRR.style.color = 'var(--yellow)'; }
-        if (dispTPDist) dispTPDist.textContent = '—';
-        if (dispSLDist) dispSLDist.textContent = '—';
+        if (positionInfo) positionInfo.innerHTML = '<div class="pos-row"><span class="lbl">ÐÑÐ¼Ð° Ð°ÐºÑ‚Ð¸Ð²ÐµÐ½ Ñ‚Ð°Ð±</span></div>';
+        if (dispRR) { dispRR.textContent = 'R = â€”'; dispRR.style.color = 'var(--yellow)'; }
+        if (dispTPDist) dispTPDist.textContent = 'â€”';
+        if (dispSLDist) dispSLDist.textContent = 'â€”';
         if (historyList) historyList.innerHTML = '';
         return;
     }
@@ -582,10 +630,10 @@ function updateActiveTabUI() {
     if (btnClose) btnClose.disabled = !tab.position;
 
     if (!tab.position) {
-        if (positionInfo) positionInfo.innerHTML = '<div class="pos-row"><span class="lbl">Няма отворена позиция</span></div>';
-        if (dispRR) { dispRR.textContent = 'R = —'; dispRR.style.color = 'var(--yellow)'; }
-        if (dispTPDist) dispTPDist.textContent = '—';
-        if (dispSLDist) dispSLDist.textContent = '—';
+        if (positionInfo) positionInfo.innerHTML = '<div class="pos-row"><span class="lbl">ÐÑÐ¼Ð° Ð¾Ñ‚Ð²Ð¾Ñ€ÐµÐ½Ð° Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ñ</span></div>';
+        if (dispRR) { dispRR.textContent = 'R = â€”'; dispRR.style.color = 'var(--yellow)'; }
+        if (dispTPDist) dispTPDist.textContent = 'â€”';
+        if (dispSLDist) dispSLDist.textContent = 'â€”';
         renderHistory(tab);
         return;
     }
@@ -598,10 +646,10 @@ function updateActiveTabUI() {
 
     if (positionInfo) {
         positionInfo.innerHTML = `
-            <div class="pos-row"><span class="lbl">Посока / Размер</span><span class="val">${p.side === 'buy' ? 'Long' : 'Short'} ($${p.sizeUSD.toFixed(0)})</span></div>
-            <div class="pos-row"><span class="lbl">Вход</span><span class="val" style="color:var(--blue)">${p.entry.toFixed(2)}</span></div>
+            <div class="pos-row"><span class="lbl">ÐŸÐ¾ÑÐ¾ÐºÐ° / Ð Ð°Ð·Ð¼ÐµÑ€</span><span class="val">${p.side === 'buy' ? 'Long' : 'Short'} ($${p.sizeUSD.toFixed(0)})</span></div>
+            <div class="pos-row"><span class="lbl">Ð’Ñ…Ð¾Ð´</span><span class="val" style="color:var(--blue)">${p.entry.toFixed(2)}</span></div>
             <div class="pos-row"><span class="lbl">uPnL</span><span class="val ${cls}">${upnl >= 0 ? '+' : ''}${upnl.toFixed(3)} USDT</span></div>
-            <div class="pos-row"><span class="lbl">Текущ R</span><span class="val ${cls}">${currentR.toFixed(2)}</span></div>
+            <div class="pos-row"><span class="lbl">Ð¢ÐµÐºÑƒÑ‰ R</span><span class="val ${cls}">${currentR.toFixed(2)}</span></div>
         `;
     }
 
@@ -636,4 +684,62 @@ function renderHistory(tab) {
             ${item.pnlText ? `<span class="pnl ${item.pnlCls}">${item.pnlText}</span>` : ''}
         </div>`;
     }).join('');
+}
+
+
+// ============================================================
+// VISIBILITY PANEL
+// ============================================================
+let _statsPollTimer = null;
+let _statsLastFetch = 0;
+
+async function updateVisibilityPanel() {
+    const tab = getActiveTab();
+    if (!tab) return;
+
+    // Loaded candles
+    const loadedEl = document.getElementById('dbgCandles');
+    if (loadedEl) {
+        loadedEl.textContent = `${tab.rawCandles?.length || 0} / ${tab.rawCandles?.length || 0}`;
+    }
+
+    // Stats от backend (на всеки 5 секунди)
+    const now = Date.now();
+    if (now - _statsLastFetch < 5000) return;
+    _statsLastFetch = now;
+
+    try {
+        const res = await fetch(`${PYTHON_SERVICE_URL}/symbols/${encodeURIComponent(tab.symbol)}/stats`);
+        if (!res.ok) return;
+        const stats = await res.json();
+
+        // Fetching indicator
+        const fetchingEl = document.getElementById('dbgFetching');
+        if (fetchingEl) {
+            if (stats.fetching) {
+                fetchingEl.textContent = 'FETCHING: YES';
+                fetchingEl.style.color = 'var(--yellow)';
+            } else {
+                fetchingEl.textContent = 'FETCHING: NO';
+                fetchingEl.style.color = 'var(--green)';
+            }
+        }
+
+        // Persisted candles
+        const persistedEl = document.getElementById('dbgPersisted');
+        if (persistedEl) {
+            const count = stats.count_1m || 0;
+            const countStr = count >= 1000000 ? `${(count / 1000000).toFixed(2)}M` : count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
+            const oldestStr = stats.oldest_1m ? new Date(stats.oldest_1m).toISOString().slice(0, 10) : '—';
+            persistedEl.textContent = `${countStr} (${oldestStr})`;
+        }
+    } catch (e) {
+        // Тихо — не искаме да спамим console
+    }
+}
+
+// Стартираме polling на всеки 5 секунди
+function startVisibilityPolling() {
+    if (_statsPollTimer) return;
+    _statsPollTimer = setInterval(updateVisibilityPanel, 5000);
 }
