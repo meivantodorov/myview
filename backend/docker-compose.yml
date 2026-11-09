@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: candle-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-candles}
+      POSTGRES_USER: ${POSTGRES_USER:-candles}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-candles} -d ${POSTGRES_DB:-candles}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [candle-net]
+
+  api:
+    build: .
+    container_name: binance-candle-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-candles}:${POSTGRES_PASSWORD:-change_me}@db:5432/${POSTGRES_DB:-candles}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [candle-net]
+
+volumes:
+  postgres_data:
+networks:
+  candle-net:
+    driver: bridge

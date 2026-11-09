@@ -1,0 +1,407 @@
+﻿
+========== JS FILES REFERENCED IN INDEX.HTML ==========
+MISSING https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js
+OK      js/state.js
+OK      js/utils.js
+MISSING js/chart.js
+MISSING js/indicators.js
+MISSING js/trading.js
+OK      js/tabs.js
+OK      js/websocket.js
+OK      js/main.js
+MISSING indicators/ma.js
+MISSING indicators/volume.js
+
+========== LOCAL frontend/js CONTENTS ==========
+main.js
+state.js
+tabs.js
+utils.js
+websocket.js
+
+========== LOCAL frontend/indicators CONTENTS ==========
+(no indicators dir)
+
+========== SYMBOLS USED IN EXISTING JS (Chart/Trading/Indicators/MA/Volume) ==========
+main.js:15: initChart();
+tabs.js:301: function rebuildIndicators(data) {
+tabs.js:324: rebuildIndicators(data);
+tabs.js:416: rebuildIndicators(data);
+tabs.js:497: rebuildIndicators(data);
+tabs.js:544: rebuildIndicators(data);
+utils.js:31: volumeConfig: window.Indicators.Volume ? window.Indicators.Volume.config : null,
+
+========== GIT STATUS (frontend) ==========
+?? frontend/
+
+
+========== GIT LOG FOR MISSING FILES ==========
+--- frontend/js/chart.js ---
+
+--- frontend/js/indicators.js ---
+
+--- frontend/js/trading.js ---
+
+--- frontend/indicators/ma.js ---
+
+--- frontend/indicators/volume.js ---
+
+
+========== HEAD REFERENCES IN MAIN.JS / TABS.JS / WEBSOCKET.JS ==========
+--- frontend\js\main.js (first 120 lines) ---
+// client/js/main.js
+
+window.addEventListener('DOMContentLoaded', () => {
+    labelTPEl = document.getElementById('labelTP');
+    labelSLEl = document.getElementById('labelSL');
+    addLineBtn = document.getElementById('addLineBtn');
+
+    loadVolumeSettings();
+
+    document.addEventListener('click', () => {
+        const menu = document.getElementById('volumeSettingsMenu');
+        if(menu) menu.classList.remove('open');
+    });
+
+    initChart();
+    initDragAndDrop();
+    createTab('BTCUSDT');
+    initWebSocket();
+    checkServiceHealth();
+});
+--- frontend\js\tabs.js (first 120 lines) ---
+// client/js/tabs.js
+
+function getActiveTab() {
+    return appState.tabs.find(t => t.id === appState.activeTabId);
+}
+
+function savedTimeframeFor(symbol) {
+    try {
+        const value = localStorage.getItem(`myview.timeframe.${symbol}`);
+        return ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'].includes(value) ? value : '1m';
+    } catch (_) { return '1m'; }
+}
+
+function saveTimeframeFor(symbol, timeframe) {
+    try { localStorage.setItem(`myview.timeframe.${symbol}`, timeframe); } catch (_) {}
+}
+
+
+const CANDLE_HISTORY_PAGE_SIZE = 1500;
+const CANDLE_HISTORY_PREFETCH_PAGES = 2;
+const CANDLE_CACHE_DB = 'binance-micro-terminal-cache';
+const CANDLE_CACHE_STORE = 'histories';
+const CANDLE_CACHE_MAX_CANDLES = 100000;
+const candleCacheWriteTimers = new Map();
+let candleCacheDbPromise = null;
+
+// IndexedDB keeps large candle histories without blocking the UI or exhausting localStorage.
+function openCandleCache() {
+    if (!('indexedDB' in window)) return Promise.resolve(null);
+    if (candleCacheDbPromise) return candleCacheDbPromise;
+    candleCacheDbPromise = new Promise(resolve => {
+        const request = indexedDB.open(CANDLE_CACHE_DB, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(CANDLE_CACHE_STORE)) db.createObjectStore(CANDLE_CACHE_STORE, { keyPath: 'key' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => { console.warn('[Cache] IndexedDB unavailable:', request.error); resolve(null); };
+        request.onblocked = () => resolve(null);
+    });
+    return candleCacheDbPromise;
+}
+
+async function readCandleCache(symbol, timeframe) {
+    const db = await openCandleCache();
+    if (!db) return null;
+    return new Promise(resolve => {
+        try {
+            const request = db.transaction(CANDLE_CACHE_STORE, 'readonly').objectStore(CANDLE_CACHE_STORE).get(`${symbol}|${timeframe}`);
+            request.onsuccess = () => {
+                const record = request.result;
+                const candles = Array.isArray(record?.candles) ? record.candles.map(normalizeServiceCandle).filter(Boolean) : [];
+                resolve(candles.length ? { candles, savedAt: record.savedAt || 0 } : null);
+            };
+            request.onerror = () => resolve(null);
+        } catch (_) { resolve(null); }
+    });
+}
+
+async function writeCandleCache(symbol, timeframe, sourceCandles) {
+    const db = await openCandleCache();
+    if (!db || !sourceCandles?.length) return;
+    const candles = sourceCandles.slice(-CANDLE_CACHE_MAX_CANDLES);
+    return new Promise(resolve => {
+        try {
+            const tx = db.transaction(CANDLE_CACHE_STORE, 'readwrite');
+            tx.objectStore(CANDLE_CACHE_STORE).put({ key: `${symbol}|${timeframe}`, savedAt: Date.now(), candles });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = tx.onabort = () => resolve(false);
+        } catch (_) { resolve(false); }
+    });
+}
+
+function scheduleCandleCacheSave(tab) {
+    if (!tab?.rawCandles?.length) return;
+    const symbol = tab.symbol;
+    const timeframe = tab.timeframe;
+    const snapshot = tab.rawCandles.slice(-CANDLE_CACHE_MAX_CANDLES);
+    const key = `${symbol}|${timeframe}`;
+    const oldTimer = candleCacheWriteTimers.get(key);
+    if (oldTimer) clearTimeout(oldTimer);
+    candleCacheWriteTimers.set(key, setTimeout(() => {
+        candleCacheWriteTimers.delete(key);
+        void writeCandleCache(symbol, timeframe, snapshot);
+    }, 1200));
+}
+
+function candleServiceHeaders(extra = {}) {
+    const headers = { ...extra };
+    let key = CANDLE_SERVICE_API_KEY;
+    try { key = localStorage.getItem('myview.candleServiceApiKey') || key; } catch (_) {}
+    if (key) headers['X-API-Key'] = key;
+    return headers;
+}
+
+async function candleServiceFetch(path, options = {}) {
+    const headers = candleServiceHeaders(options.headers || {});
+    return fetch(`${PYTHON_SERVICE_URL}${path}`, { ...options, headers });
+}
+
+function normalizeServiceCandle(c) {
+    if (!c) return null;
+    let time = Number(c.time);
+    if (!Number.isFinite(time)) {
+        const raw = c.open_time ?? c.openTime;
+        time = typeof raw === 'number' ? raw : Date.parse(raw);
+    }
+    if (!Number.isFinite(time)) return null;
+    if (time > 1e12) time = Math.floor(time / 1000);
+    else time = Math.floor(time);
+    const open = Number(c.open), high = Number(c.high), low = Number(c.low), close = Number(c.close);
+    const volume = Number(c.volume ?? 0);
+    if (![open, high, low, close].every(Number.isFinite)) return null;
+    return { time, open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 };
+}
+
+function mergeCandlesByTime(existing, incoming) {
+    const byTime = new Map((existing || []).map(c => [c.time, c]));
+    for (const c of incoming || []) byTime.set(c.time, c);
+    return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+--- frontend\js\websocket.js (first 120 lines) ---
+// client/js/websocket.js
+
+let dragging = null;
+
+let wsSubscriptions = new Set();
+let wsReconnectDelay = 1000;
+let wsReconnectTimer = null;
+
+function sendTabSubscription(tab) {
+    if (!tab || !tab.registered || !wsConn || wsConn.readyState !== WebSocket.OPEN) return;
+    const key = `${tab.symbol}:${tab.timeframe}`;
+    if (wsSubscriptions.has(key)) return;
+    wsConn.send(JSON.stringify({ symbol: tab.symbol, timeframe: tab.timeframe }));
+    wsSubscriptions.add(key);
+}
+
+function subscribeTabToService(tab) {
+    if (wsConn && wsConn.readyState === WebSocket.OPEN) sendTabSubscription(tab);
+}
+
+// The service protocol has subscribe but no unsubscribe message.
+// Reconnect on timeframe changes to clear stale server-side subscriptions safely.
+function resetWebSocketSubscriptions() {
+    wsSubscriptions = new Set();
+    if (wsConn && (wsConn.readyState === WebSocket.OPEN || wsConn.readyState === WebSocket.CONNECTING)) {
+        try { wsConn.close(1000, 'timeframe changed'); }
+        catch (e) { console.warn('[Candle Service] WebSocket reset failed', e); }
+    } else {
+        initWebSocket();
+    }
+}
+
+function sendAllTabSubscriptions() {
+    appState.tabs.forEach(sendTabSubscription);
+}
+
+function initWebSocket() {
+    if (wsConn && (wsConn.readyState === WebSocket.OPEN || wsConn.readyState === WebSocket.CONNECTING)) return;
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    try {
+        wsConn = new WebSocket(CANDLE_SERVICE_WS_URL);
+    } catch (e) {
+        console.error('[Candle Service] WebSocket initialization failed', e);
+        scheduleWebSocketReconnect();
+        return;
+    }
+
+    wsConn.onopen = () => {
+        console.info('[Candle Service] Client WebSocket connected');
+        wsReconnectDelay = 1000;
+        wsSubscriptions = new Set();
+        sendAllTabSubscriptions();
+    };
+
+    wsConn.onmessage = (ev) => {
+        try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'CONNECTED') { sendAllTabSubscriptions(); return; }
+            if (msg.type === 'SUBSCRIBED') {
+                console.info(`[Candle Service] Subscribed ${msg.symbol} ${msg.timeframe}`);
+                return;
+            }
+            if (msg.type === 'ERROR') {
+                console.warn('[Candle Service] WebSocket error:', msg.message);
+                return;
+            }
+            if (msg.type === 'HISTORY_BURST') return; // HTTP paging is authoritative; WS is used for live updates.
+            if (!['CANDLE_UPDATE', 'CANDLE_UPDATED'].includes(msg.type) || !msg.symbol || !msg.candle) return;
+
+            const tab = appState.tabs.find(t => t.symbol === msg.symbol && t.timeframe === msg.timeframe);
+            if (!tab) return;
+            const normalized = normalizeServiceCandle(msg.candle);
+            if (!normalized) return;
+            applyServerCandle(tab, normalized);
+            checkTabTPSL(tab, normalized.close);
+            if (appState.activeTabId === tab.id) updateActiveTabUI();
+            updateGlobalStats();
+        } catch (e) {
+            console.error('[Candle Service] Invalid WebSocket message', e);
+        }
+    };
+
+    wsConn.onerror = (e) => console.warn('[Candle Service] WebSocket connection error', e);
+    wsConn.onclose = () => {
+        wsSubscriptions = new Set();
+        scheduleWebSocketReconnect();
+    };
+}
+
+function scheduleWebSocketReconnect() {
+    if (wsReconnectTimer) return;
+    const wait = wsReconnectDelay;
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 15000);
+    wsReconnectTimer = setTimeout(() => {
+        wsReconnectTimer = null;
+        initWebSocket();
+    }, wait);
+}
+
+function initDragAndDrop() {
+    const chartEl = document.getElementById('chart');
+    const chartWrap = document.getElementById('chartCanvas');
+    const addLineBtn = document.getElementById('addLineBtn');
+
+    chartWrap.addEventListener('mousemove', (e) => {
+        if (dragging) return;
+        const rect = chartEl.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const x = e.clientX - rect.left;
+
+        if (x < 0 || x > chartEl.clientWidth || y < 0 || y > chartEl.clientHeight) { addLineBtn.style.display = 'none'; return; }
+        if (x > chartEl.clientWidth - 60) { addLineBtn.style.display = 'none'; return; }
+
+        const price = candleSeries.coordinateToPrice(y);
+        if (price !== null) {
+            addLineBtn.style.display = 'flex';
+            addLineBtn.style.left = (chartEl.clientWidth - 60) + 'px'; 
+            addLineBtn.style.top = y + 'px';
+            addLineBtn.dataset.price = price;
+        }
+--- frontend\js\state.js (first 120 lines) ---
+// client/js/state.js
+
+const VERSION = "v9.2-docker"; // Binance Candle Service adapter + paged history
+const PYTHON_SERVICE_URL = "/api";
+const CANDLE_SERVICE_WS_URL = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`;
+// Leave empty when API_KEY in the Candle Service .env is empty.
+const CANDLE_SERVICE_API_KEY = "";
+const FEE_RATE = 0.00075;
+
+const COLORS = { 
+    entry: '#3b82f6', 
+    tp: '#0ecb81', 
+    sl: '#f6465d', 
+    custom: '#f0b90b' 
+};
+
+let appState = {
+    capital: 500,
+    posPct: 10,
+    maxPos: 3,
+    tabs: [],
+    activeTabId: null,
+    realizedPnl: 0,
+};
+
+let TIMEZONE_OFFSET_SECONDS = -new Date().getTimezoneOffset() * 60;
+
+let chartObj = null;
+let candleSeries = null;
+let wsConn = null;
+let isSwitchingTab = false;
+let activeIndicators = {}; 
+
+let labelTPEl = null;
+let labelSLEl = null;
+let addLineBtn = null;
+
+// ÐÐžÐ’Ð˜ ÐŸÐ ÐžÐœÐ•ÐÐ›Ð˜Ð’Ð˜ Ð—Ð Ð”Ð•Ð‘ÐªÐ“ ÐŸÐÐÐ•Ð›Ð
+let debugStats = {
+    initialLoadTime: 0,
+    lastGraphFixTime: 0,
+    totalBatches: 0,
+    currentBatches: 0,
+    totalBackendCandles: 0,
+    loadedCandles: 0
+};
+--- frontend\js\utils.js (first 120 lines) ---
+// client/js/utils.js
+
+async function checkServiceHealth() {
+    const statusEl = document.getElementById('serviceStatus');
+    if (!statusEl) return;
+    statusEl.textContent = 'ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð½Ð° Candle Service...';
+    statusEl.style.color = 'var(--yellow)';
+    statusEl.style.borderColor = 'var(--yellow)';
+
+    try {
+        const response = await fetch(`${PYTHON_SERVICE_URL}/health/ready`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (data.status !== 'ready' || !data.database) throw new Error('Service/database not ready');
+        const workers = Array.isArray(data.active_workers) ? data.active_workers.length : 0;
+        statusEl.textContent = `âœ“ Candle Service Â· ${workers} workers`;
+        statusEl.style.color = 'var(--green)';
+        statusEl.style.borderColor = 'var(--green)';
+    } catch (error) {
+        statusEl.textContent = 'âœ• Candle Service Offline';
+        statusEl.style.color = 'var(--red)';
+        statusEl.style.borderColor = 'var(--red)';
+        console.warn('[Candle Service] Health check failed:', error.message);
+    }
+}
+
+function copyDebugLog() {
+    const logData = {
+        service: { version: VERSION, url: PYTHON_SERVICE_URL, websocketState: wsConn ? wsConn.readyState : 'not-created' },
+        indicators: Object.keys(activeIndicators),
+        volumeConfig: window.Indicators.Volume ? window.Indicators.Volume.config : null,
+        appState: { capital: appState.capital, posPct: appState.posPct, maxPos: appState.maxPos, activeTabId: appState.activeTabId, realizedPnl: appState.realizedPnl },
+        tabs: appState.tabs.map(t => ({
+            id: t.id,
+            symbol: t.symbol,
+            currentPrice: t.currentPrice,
+            timeframe: t.timeframe,
+            loadedCandles: t.rawCandles ? t.rawCandles.length : 0,
+            totalCandlesInBackend: t.totalCandles || 0,
+            position: t.position ? { side: t.position.side, entry: t.position.entry, sl: t.position.sl, tp: t.position.tp, sizeUSD: t.position.sizeUSD } : null,
+            history: t.history
+        }))
+    };
+    const str = JSON.stringify(logData, null, 2);
+    navigator.clipboard.writeText(str).then(() => alert("Debug Ð»Ð¾Ð³ÑŠÑ‚ Ðµ ÐºÐ¾Ð¿Ð¸Ñ€Ð°Ð½!"));
+}
